@@ -1,0 +1,20 @@
+{
+  "name": "threejs-creative-3d",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Three.js + GLSL 创意 3D 学习项目",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3"
+  }
+}
