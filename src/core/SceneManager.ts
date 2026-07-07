@@ -131,7 +131,9 @@ export class SceneManager {
     this.rafId = requestAnimationFrame((t) => this.tick(t))
 
     // 计算 delta time（秒）和 elapsed time（秒）
+    // delta 是上一帧到这一帧之间经过的时间，不管帧率多少，speed * delta 的结果始终是每秒旋转固定的弧度：60fps 时 delta ≈ 0.0167s 30fps 时 delta ≈ 0.0333s
     const delta = (now - this.lastTime) / 1000
+    // elapsed（已运行时间）：从页面加载到现在经过了多少秒。用于需要绝对时间的效果，比如正弦波动画 
     const elapsed = now / 1000
     this.lastTime = now
 
