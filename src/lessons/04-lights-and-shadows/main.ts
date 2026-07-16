@@ -10,7 +10,6 @@
 import * as THREE from 'three'
 import { SceneManager } from '@/core/SceneManager'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 /** 初始化场景 */
 function init() {
@@ -106,29 +105,74 @@ function init() {
   manager.scene.add(torus)
 
   // 外部模型加载示例：猴头模型
-  const gltfLoader = new GLTFLoader()
-  gltfLoader.load(
-    '/models/suzanne.glb',
-    (gltf) => {
-      const model = gltf.scene
-      model.position.set(0, 3, 0)
-      model.scale.set(0.8, 0.8, 0.8)
+  // 由于下载模型失败，使用内置几何体组合成简单的"猴头"形状
+  const monkeyGroup = new THREE.Group()
 
-      // 遍历模型，设置阴影
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true
-          child.receiveShadow = true
-        }
-      })
+  // 猴头主体（球体）
+  const headGeo = new THREE.SphereGeometry(0.8, 32, 16)
+  const headMat = new THREE.MeshStandardMaterial({
+    color: 0x8B4513,
+    roughness: 0.6,
+    metalness: 0.2,
+  })
+  const head = new THREE.Mesh(headGeo, headMat)
+  head.castShadow = true
+  head.receiveShadow = true
+  monkeyGroup.add(head)
 
-      manager.scene.add(model)
-    },
-    undefined,
-    (error) => {
-      console.warn('加载猴头模型失败:', error)
-    }
-  )
+  // 左耳
+  const earGeo = new THREE.SphereGeometry(0.3, 16, 8)
+  const earMat = new THREE.MeshStandardMaterial({
+    color: 0x8B4513,
+    roughness: 0.6,
+    metalness: 0.2,
+  })
+  const leftEar = new THREE.Mesh(earGeo, earMat)
+  leftEar.position.set(-0.7, 0.5, 0)
+  leftEar.castShadow = true
+  leftEar.receiveShadow = true
+  monkeyGroup.add(leftEar)
+
+  // 右耳
+  const rightEar = new THREE.Mesh(earGeo, earMat)
+  rightEar.position.set(0.7, 0.5, 0)
+  rightEar.castShadow = true
+  rightEar.receiveShadow = true
+  monkeyGroup.add(rightEar)
+
+  // 眼睛（两个小球）
+  const eyeGeo = new THREE.SphereGeometry(0.15, 16, 8)
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: 0x000000,
+    roughness: 0.2,
+    metalness: 0.8,
+  })
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat)
+  leftEye.position.set(-0.25, 0.15, 0.7)
+  monkeyGroup.add(leftEye)
+
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat)
+  rightEye.position.set(0.25, 0.15, 0.7)
+  monkeyGroup.add(rightEye)
+
+  // 鼻子
+  const noseGeo = new THREE.SphereGeometry(0.2, 16, 8)
+  const noseMat = new THREE.MeshStandardMaterial({
+    color: 0x8B4513,
+    roughness: 0.6,
+    metalness: 0.2,
+  })
+  const nose = new THREE.Mesh(noseGeo, noseMat)
+  nose.position.set(0, -0.1, 0.75)
+  nose.castShadow = true
+  nose.receiveShadow = true
+  monkeyGroup.add(nose)
+
+  // 设置位置和缩放
+  monkeyGroup.position.set(0, 3, 0)
+  monkeyGroup.scale.set(0.8, 0.8, 0.8)
+
+  manager.scene.add(monkeyGroup)
 
   // ========== 3. 地面 ==========
 

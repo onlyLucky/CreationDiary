@@ -135,4 +135,4 @@ gltfLoader.load(
 | `new THREE.SpotLightHelper(light)` | 聚光灯 Helper |
 | `new THREE.PointLightHelper(light, size)` | 点光源 Helper |
 | `new THREE.TextureLoader().load(url)` | 加载普通纹理 |
-| `new GLTFLoader().load(url)` | 加载 GLTF/GLB 模型 |
+| `new THREE.Group()` | 创建组合对象 |
