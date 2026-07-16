@@ -12,10 +12,6 @@ import * as THREE from 'three'
 import { SceneManager } from '@/core/SceneManager'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-// 导入纹理文件（Vite 会处理路径和打包）
-import rustMetalUrl from '@/assets/texture/rust-metal.jpg'
-import woodFloorUrl from '@/assets/texture/wood-floor.jpg'
-
 /**
  * 创建棋盘格纹理（程序生成，复用第 2 课）
  *
@@ -305,9 +301,9 @@ function init() {
   // 使用 TextureLoader 加载外部纹理文件
   const textureLoader = new THREE.TextureLoader()
 
-  // 4a. 加载金属锈蚀纹理
+  // 4a. 加载金属锈蚀纹理（从 public/textures/ 目录加载）
   textureLoader.load(
-    rustMetalUrl,
+    '/textures/rust-metal.jpg',
     (texture) => {
       // 纹理加载成功
       texture.wrapS = THREE.RepeatWrapping
@@ -337,9 +333,9 @@ function init() {
     }
   )
 
-  // 4b. 加载木地板纹理
+  // 4b. 加载木地板纹理（从 public/textures/ 目录加载）
   textureLoader.load(
-    woodFloorUrl,
+    '/textures/wood-floor.jpg',
     (texture) => {
       texture.wrapS = THREE.RepeatWrapping
       texture.wrapT = THREE.RepeatWrapping
