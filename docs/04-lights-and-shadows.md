@@ -63,6 +63,61 @@ const pointHelper = new THREE.PointLightHelper(pointLight, 0.5)
 scene.add(pointHelper)
 ```
 
+## 外部资源加载
+
+### TextureLoader 加载地面纹理
+
+```typescript
+const textureLoader = new THREE.TextureLoader()
+textureLoader.load(
+  '/textures/concrete-floor.jpg',
+  (texture) => {
+    texture.wrapS = THREE.RepeatWrapping
+    texture.wrapT = THREE.RepeatWrapping
+    texture.repeat.set(4, 4)
+
+    const groundMat = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.9,
+      metalness: 0,
+    })
+    // 使用材质...
+  },
+  undefined,
+  (error) => {
+    console.warn('加载纹理失败:', error)
+  }
+)
+```
+
+### GLTFLoader 加载模型
+
+```typescript
+const gltfLoader = new GLTFLoader()
+gltfLoader.load(
+  '/models/suzanne.glb',
+  (gltf) => {
+    const model = gltf.scene
+    model.position.set(0, 3, 0)
+    model.scale.set(0.8, 0.8, 0.8)
+
+    // 遍历模型，设置阴影
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+
+    scene.add(model)
+  },
+  undefined,
+  (error) => {
+    console.warn('加载模型失败:', error)
+  }
+)
+```
+
 ## API 速查
 
 | API | 用途 |
@@ -79,3 +134,5 @@ scene.add(pointHelper)
 | `new THREE.DirectionalLightHelper(light, size)` | 方向光 Helper |
 | `new THREE.SpotLightHelper(light)` | 聚光灯 Helper |
 | `new THREE.PointLightHelper(light, size)` | 点光源 Helper |
+| `new THREE.TextureLoader().load(url)` | 加载普通纹理 |
+| `new GLTFLoader().load(url)` | 加载 GLTF/GLB 模型 |

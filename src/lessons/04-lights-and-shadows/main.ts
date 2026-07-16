@@ -10,6 +10,7 @@
 import * as THREE from 'three'
 import { SceneManager } from '@/core/SceneManager'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 /** 初始化场景 */
 function init() {
@@ -104,21 +105,74 @@ function init() {
   torus.castShadow = true
   manager.scene.add(torus)
 
+  // 外部模型加载示例：猴头模型
+  const gltfLoader = new GLTFLoader()
+  gltfLoader.load(
+    '/models/suzanne.glb',
+    (gltf) => {
+      const model = gltf.scene
+      model.position.set(0, 3, 0)
+      model.scale.set(0.8, 0.8, 0.8)
+
+      // 遍历模型，设置阴影
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+      })
+
+      manager.scene.add(model)
+    },
+    undefined,
+    (error) => {
+      console.warn('加载猴头模型失败:', error)
+    }
+  )
+
   // ========== 3. 地面 ==========
 
   const groundGeo = new THREE.PlaneGeometry(20, 20)
-  const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x222233,
-    roughness: 0.9,
-    metalness: 0,
-  })
-  const ground = new THREE.Mesh(groundGeo, groundMat)
-  ground.rotation.x = -Math.PI / 2
-  ground.position.y = -1
-  ground.receiveShadow = true
-  manager.scene.add(ground)
+
+  // 外部纹理加载示例：地面纹理
+  const textureLoader = new THREE.TextureLoader()
+  textureLoader.load(
+    '/textures/concrete-floor.jpg',
+    (texture) => {
+      texture.wrapS = THREE.RepeatWrapping
+      texture.wrapT = THREE.RepeatWrapping
+      texture.repeat.set(4, 4)
+
+      const groundMat = new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 0.9,
+        metalness: 0,
+      })
+      const ground = new THREE.Mesh(groundGeo, groundMat)
+      ground.rotation.x = -Math.PI / 2
+      ground.position.y = -1
+      ground.receiveShadow = true
+      manager.scene.add(ground)
+      manager.registerDisposable(groundMat)
+    },
+    undefined,
+    (error) => {
+      console.warn('加载地面纹理失败，使用默认颜色:', error)
+      // 降级：使用默认颜色
+      const groundMat = new THREE.MeshStandardMaterial({
+        color: 0x222233,
+        roughness: 0.9,
+        metalness: 0,
+      })
+      const ground = new THREE.Mesh(groundGeo, groundMat)
+      ground.rotation.x = -Math.PI / 2
+      ground.position.y = -1
+      ground.receiveShadow = true
+      manager.scene.add(ground)
+      manager.registerDisposable(groundMat)
+    }
+  )
   manager.registerDisposable(groundGeo)
-  manager.registerDisposable(groundMat)
 
   // ========== 4. 灯光 Helper ==========
 
