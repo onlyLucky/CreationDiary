@@ -4,5 +4,5 @@
  * 切换方式：修改下面的 import 路径指向不同的 lesson
  */
 
-// 当前课程：第 2 课 - 几何体与图元
-import './lessons/02-primitives/main'
+// 当前课程：第 3 课 - 材质系统
+import './lessons/03-materials/main'
