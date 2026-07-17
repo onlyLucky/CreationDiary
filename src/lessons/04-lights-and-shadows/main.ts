@@ -57,6 +57,9 @@ function init() {
    * 2. light.castShadow = true — 灯光投射阴影
    * 3. mesh.castShadow = true — 物体投射阴影
    * 4. mesh.receiveShadow = true — 物体接收阴影
+   * 灯光.castShadow — 灯光"有没有能力"投射阴影
+   * 物体.castShadow — 这个物体"会不会"挡住光产生阴影
+   * 地面.receiveShadow — 这个物体"能不能"显示别人投来的阴影
    */
   manager.renderer.shadowMap.enabled = true
 
@@ -133,8 +136,8 @@ function init() {
    *
    * ⚠️ 重要：物体超出这个范围就不会有阴影！
    */
-  directionalLight.shadow.mapSize.width = 1024
-  directionalLight.shadow.mapSize.height = 1024
+  directionalLight.shadow.mapSize.width = 2048
+  directionalLight.shadow.mapSize.height = 2048
   directionalLight.shadow.camera.near = 0.5
   directionalLight.shadow.camera.far = 50
   directionalLight.shadow.camera.left = -10
@@ -142,6 +145,9 @@ function init() {
   directionalLight.shadow.camera.top = 10
   directionalLight.shadow.camera.bottom = -10
   manager.scene.add(directionalLight)
+
+  const shadowCameraHelper = new THREE.CameraHelper(directionalLight.shadow.camera)
+  // manager.scene.add(shadowCameraHelper)
 
   /**
    * 1d. PointLight — 点光源
