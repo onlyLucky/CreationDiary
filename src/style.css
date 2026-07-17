@@ -44,3 +44,100 @@ html, body {
   opacity: 0.5;
   margin-top: 4px;
 }
+
+#controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.control-item {
+  margin-bottom: 12px;
+}
+
+.control-item label {
+  display: block;
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin-bottom: 5px;
+}
+
+.control-item select {
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.control-item select:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.control-item select:focus {
+  outline: none;
+  border-color: #4488ff;
+}
+
+.control-item input[type="range"] {
+  width: 100%;
+  max-width: 200px;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  outline: none;
+}
+
+.control-item input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #4488ff;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.slider-value {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-left: 8px;
+}
+
+.control-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-checkbox label {
+  margin-bottom: 0;
+}
+
+.control-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.control-item button {
+  background: rgba(68, 136, 255, 0.8);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.control-item button:hover {
+  background: rgba(68, 136, 255, 1);
+}

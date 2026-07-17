@@ -1,6 +1,6 @@
 # 第 4 课技术笔记：灯光与阴影实现细节
 
-> 日期：待定
+> 日期：2026-07-16
 
 ---
 
@@ -63,6 +63,61 @@ const pointHelper = new THREE.PointLightHelper(pointLight, 0.5)
 scene.add(pointHelper)
 ```
 
+## 灯光切换功能
+
+代码中添加了灯光切换功能，可以通过下拉菜单选择显示哪种灯光：
+
+**HTML 结构**：
+```html
+<select id="light-select">
+  <option value="all">全部显示</option>
+  <option value="ambient">环境光 (Ambient)</option>
+  <option value="hemisphere">半球光 (Hemisphere)</option>
+  <option value="directional">方向光 (Directional)</option>
+  <option value="point">点光源 (Point)</option>
+  <option value="spot">聚光灯 (Spot)</option>
+</select>
+```
+
+**TypeScript 实现**：
+```typescript
+// 灯光对象映射
+const lights: Record<string, THREE.Light> = {
+  ambient: ambientLight,
+  hemisphere: hemisphereLight,
+  directional: directionalLight,
+  point: pointLight,
+  spot: spotLight,
+}
+
+// 切换灯光显示
+function switchLight(type: string) {
+  // 先隐藏所有灯光
+  Object.values(lights).forEach((light) => {
+    light.visible = false
+  })
+
+  if (type === 'all') {
+    // 显示所有灯光
+    Object.values(lights).forEach((light) => {
+      light.visible = true
+    })
+  } else {
+    // 只显示选中的灯光
+    if (lights[type]) {
+      lights[type].visible = true
+    }
+  }
+}
+
+// 添加下拉菜单事件监听
+const lightSelect = document.getElementById('light-select') as HTMLSelectElement
+lightSelect.addEventListener('change', (e) => {
+  const target = e.target as HTMLSelectElement
+  switchLight(target.value)
+})
+```
+
 ## 外部资源加载
 
 ### TextureLoader 加载地面纹理
@@ -92,28 +147,52 @@ textureLoader.load(
 
 ### GLTFLoader 加载模型
 
+**模型说明**：Suzanne 是 Blender 的默认猴头模型，常用于 3D 场景测试。
+
 ```typescript
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+
 const gltfLoader = new GLTFLoader()
 gltfLoader.load(
-  '/models/suzanne.glb',
+  '/models/suzanne.glb',  // 从 public/models/ 加载
   (gltf) => {
     const model = gltf.scene
     model.position.set(0, 3, 0)
     model.scale.set(0.8, 0.8, 0.8)
 
-    // 遍历模型，设置阴影
+    // 遍历模型，设置阴影和材质
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.castShadow = true
         child.receiveShadow = true
+        // Suzanne 模型没有材质，需要手动添加
+        child.material = new THREE.MeshStandardMaterial({
+          color: 0x8B4513,
+          roughness: 0.6,
+          metalness: 0.2,
+        })
       }
     })
 
     scene.add(model)
   },
-  undefined,
+  (progress) => {
+    console.log('加载进度:', (progress.loaded / progress.total * 100) + '%')
+  },
   (error) => {
-    console.warn('加载模型失败:', error)
+    console.error('加载失败:', error)
+    // 降级：使用简单球体
+    const fallbackGeo = new THREE.SphereGeometry(0.8, 32, 16)
+    const fallbackMat = new THREE.MeshStandardMaterial({
+      color: 0x8B4513,
+      roughness: 0.6,
+      metalness: 0.2,
+    })
+    const fallback = new THREE.Mesh(fallbackGeo, fallbackMat)
+    fallback.position.set(0, 3, 0)
+    fallback.castShadow = true
+    fallback.receiveShadow = true
+    scene.add(fallback)
   }
 )
 ```
@@ -135,4 +214,5 @@ gltfLoader.load(
 | `new THREE.SpotLightHelper(light)` | 聚光灯 Helper |
 | `new THREE.PointLightHelper(light, size)` | 点光源 Helper |
 | `new THREE.TextureLoader().load(url)` | 加载普通纹理 |
+| `new THREE.GLTFLoader().load(url)` | 加载 GLTF/GLB 模型 |
 | `new THREE.Group()` | 创建组合对象 |
