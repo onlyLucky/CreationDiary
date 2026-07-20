@@ -194,6 +194,27 @@ export class ControlPanel {
     return this.controls.get(id)
   }
 
+  /** 设置控件值（不触发 onChange） */
+  setValue(id: string, value: string | number | boolean): void {
+    const element = this.controls.get(id)
+    if (!element) return
+
+    if (element instanceof HTMLSelectElement) {
+      element.value = String(value)
+    } else if (element instanceof HTMLInputElement) {
+      if (element.type === 'range') {
+        element.value = String(value)
+        // 更新滑块后面的数值显示
+        const valueDisplay = element.parentElement?.querySelector('.slider-value')
+        if (valueDisplay) {
+          valueDisplay.textContent = String(value)
+        }
+      } else if (element.type === 'checkbox') {
+        element.checked = Boolean(value)
+      }
+    }
+  }
+
   /** 清空所有控件 */
   clear(): void {
     this.container.innerHTML = ''

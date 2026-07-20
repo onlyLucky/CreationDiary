@@ -27,7 +27,7 @@ export interface SceneManagerOptions {
 
 export class SceneManager {
   scene: THREE.Scene
-  camera: THREE.PerspectiveCamera
+  camera: THREE.Camera
   renderer: THREE.WebGLRenderer
 
   /** 上一帧的时间戳（毫秒） */
@@ -78,13 +78,29 @@ export class SceneManager {
     return { width: window.innerWidth, height: window.innerHeight }
   }
 
+  /** 设置相机 */
+  setCamera(camera: THREE.Camera) {
+    this.camera = camera
+    console.log('[SceneManager] 相机已切换', camera.constructor.name)
+  }
+
   /** 窗口大小变化处理 */
   private handleResize() {
     const { width, height } = this.getSize()
 
-    // 更新相机宽高比
-    this.camera.aspect = width / height
-    this.camera.updateProjectionMatrix()
+    // 更新相机宽高比（根据相机类型）
+    if (this.camera instanceof THREE.PerspectiveCamera) {
+      this.camera.aspect = width / height
+      this.camera.updateProjectionMatrix()
+    } else if (this.camera instanceof THREE.OrthographicCamera) {
+      // 正交相机需要更新 left/right/top/bottom
+      const frustumSize = 10
+      this.camera.left = -frustumSize * width / height / 2
+      this.camera.right = frustumSize * width / height / 2
+      this.camera.top = frustumSize / 2
+      this.camera.bottom = -frustumSize / 2
+      this.camera.updateProjectionMatrix()
+    }
 
     // 更新渲染器尺寸
     this.renderer.setSize(width, height)

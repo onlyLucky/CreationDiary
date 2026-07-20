@@ -19,7 +19,15 @@ html, body {
   height: 100%;
 }
 
-#canvas {
+#canvas,
+#homework {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* 禁止双指缩放页面，由 Three.js 处理触摸事件 */
+}
+
+#homework_canvas {
   display: block;
   width: 100%;
   height: 100%;
