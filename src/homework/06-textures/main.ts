@@ -19,6 +19,7 @@
 import * as THREE from 'three'
 import { SceneManager } from '@/core/SceneManager'
 import { ControlPanel } from '@/core/ControlPanel'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 
@@ -34,6 +35,12 @@ function init() {
   // 相机位置
   manager.camera.position.set(0, 0, 3)
   manager.camera.lookAt(0, 0, 0)
+
+  // 拖动旋转控制
+  const controls = new OrbitControls(manager.camera, canvas)
+  controls.enableDamping = true
+  controls.dampingFactor = 0.05
+  controls.target.set(0, 0, 0)
 
   /* ========== 1. 环境贴图加载（25分）==========
    *
@@ -112,16 +119,22 @@ function init() {
 
       watchBaseY = watchModel.position.y
 
-      /* 设置阴影 */
+      /* 设置阴影和材质 */
       watchModel.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = true
           child.receiveShadow = true
+
+          // 调整材质参数，增强金属质感
+          const material = child.material as THREE.MeshStandardMaterial
+          material.metalness = 0.9    // 高金属度
+          material.roughness = 0.1    // 低粗糙度，镜面反射
+          material.envMapIntensity = 1.5  // 增强环境反射强度
         }
       })
 
       manager.scene.add(watchModel)
-      console.log('✅ 模型加载完成，已居中展示')
+      console.log('✅ 模型加载完成，已居中展示，金属质感已调整')
     },
     (progress) => {
       const percent = (progress.loaded / progress.total * 100).toFixed(0)
@@ -149,13 +162,97 @@ function init() {
 
   /* ========== 5. 控制面板（15分）==========
    *
-   * 控制面板：调节旋转速度、浮动幅度、自动旋转开关
+   * 控制面板：调节旋转速度、浮动幅度、自动旋转开关、材质切换、纹理切换
    */
 
   const panel = new ControlPanel()
-  let rotationSpeed = 0.3
-  let floatAmplitude = 0.3
+  let rotationSpeed = 1
+  let floatAmplitude = 0.2
   let autoRotate = true
+
+  // 材质预设
+  const materialPresets = {
+    chrome: { metalness: 1.0, roughness: 0.05, color: 0xffffff },
+    gold: { metalness: 1.0, roughness: 0.2, color: 0xffd700 },
+    copper: { metalness: 1.0, roughness: 0.3, color: 0xb87333 },
+    brushed: { metalness: 0.95, roughness: 0.4, color: 0xcccccc },
+    rubber: { metalness: 0.0, roughness: 0.95, color: 0x333333 },
+  }
+
+  // 纹理加载器
+  const textureLoader = new THREE.TextureLoader()
+
+  // 纹理预设（AO + Normal 贴图组合）
+  const texturePresets = {
+    none: { ao: null, normal: null },
+    rocks: {
+      ao: textureLoader.load('/textures/watch/aerial_rocks_01_ao_1k.jpg'),
+      normal: textureLoader.load('/textures/watch/aerial_rocks_01_nor_gl_1k.jpg'),
+    },
+    leather: {
+      ao: textureLoader.load('/textures/watch/fabric_leather_01_ao_1k.jpg'),
+      normal: textureLoader.load('/textures/watch/fabric_leather_01_nor_gl_1k.jpg'),
+    },
+    thatch: {
+      ao: textureLoader.load('/textures/watch/thatch_roof_angled_ao_1k.jpg'),
+      normal: textureLoader.load('/textures/watch/thatch_roof_angled_nor_gl_1k.jpg'),
+    },
+  }
+
+  // 材质切换下拉框
+  panel.addSelect({
+    id: 'material',
+    label: '材质类型',
+    type: 'select',
+    options: [
+      { value: 'chrome', label: 'Chrome（铬钢）' },
+      { value: 'gold', label: 'Gold（黄金）' },
+      { value: 'copper', label: 'Copper（红铜）' },
+      { value: 'brushed', label: 'Brushed（拉丝）' },
+      { value: 'rubber', label: 'Rubber（橡胶）' },
+    ],
+    defaultValue: 'chrome',
+    onChange: (value) => {
+      const preset = materialPresets[value as keyof typeof materialPresets]
+      if (watchModel && preset) {
+        watchModel.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const material = child.material as THREE.MeshStandardMaterial
+            material.metalness = preset.metalness
+            material.roughness = preset.roughness
+            material.color.set(preset.color)
+          }
+        })
+      }
+    },
+  })
+
+  // 纹理切换下拉框
+  panel.addSelect({
+    id: 'texture',
+    label: '纹理贴图',
+    type: 'select',
+    options: [
+      { value: 'none', label: '无纹理' },
+      { value: 'rocks', label: '岩石纹理' },
+      { value: 'leather', label: '皮革纹理' },
+      { value: 'thatch', label: '茅草纹理' },
+    ],
+    defaultValue: 'none',
+    onChange: (value) => {
+      const preset = texturePresets[value as keyof typeof texturePresets]
+      if (watchModel && preset) {
+        watchModel.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const material = child.material as THREE.MeshStandardMaterial
+            material.aoMap = preset.ao
+            material.normalMap = preset.normal
+            material.needsUpdate = true
+          }
+        })
+      }
+    },
+  })
 
   // 旋转速度滑块
   panel.addSlider({
@@ -165,7 +262,7 @@ function init() {
     min: 0,
     max: 2,
     step: 0.1,
-    defaultValue: 0.3,
+    defaultValue: 1,
     onChange: (value) => { rotationSpeed = value },
   })
 
@@ -177,7 +274,7 @@ function init() {
     min: 0,
     max: 1,
     step: 0.05,
-    defaultValue: 0.3,
+    defaultValue: 0.2,
     onChange: (value) => { floatAmplitude = value },
   })
 
@@ -199,7 +296,7 @@ function init() {
 
   manager.onUpdate(() => {
     const elapsed = clock.getElapsedTime()
-    /* if (watchModel) {
+    if (watchModel) {
       // 自动旋转（平滑旋转）
       if (autoRotate) {
         watchModel.rotation.y += rotationSpeed * 0.01
@@ -207,7 +304,7 @@ function init() {
       // 浮动效果：使用 sin 函数实现上下浮动
       // elapsed * 0.8 控制浮动频率，floatAmplitude 控制浮动幅度
       watchModel.position.y = watchBaseY + Math.sin(elapsed * 0.8) * floatAmplitude
-    } */
+    }
   })
 
   manager.start()
