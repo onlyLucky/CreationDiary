@@ -23,7 +23,7 @@ if (homeworkContainer) {
 
 // 根据模式动态导入对应的模块
 if (MODE === 'lessons') {
-  import('./lessons/05-cameras/main')
+  import('./lessons/06-textures/main')
 } else {
-  import('./homework/05-cameras-gsap-path/main')
+  import('./homework/06-textures/main')
 }
