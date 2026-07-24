@@ -1,5 +1,4 @@
-/**
- * 入口文件 - 切换不同的课程
+/**入口文件 - 切换不同的课程
  *
  * 切换方式：修改 MODE 变量
  *   'lessons'  - 渲染课程
@@ -8,7 +7,7 @@
 
 type Mode = 'lessons' | 'homework'
 
-const MODE = 'homework' as Mode
+const MODE = 'lessons' as Mode
 
 // 根据模式显示/隐藏对应的 canvas 容器
 const lessonsCanvas = document.getElementById('canvas')
@@ -23,7 +22,7 @@ if (homeworkContainer) {
 
 // 根据模式动态导入对应的模块
 if (MODE === 'lessons') {
-  import('./lessons/06-textures/main')
+  import('./lessons/07-scene-graph/main')
 } else {
   import('./homework/06-textures/main')
 }
