@@ -22,7 +22,7 @@ if (homeworkContainer) {
 
 // 根据模式动态导入对应的模块
 if (MODE === 'lessons') {
-  import('./lessons/07-scene-graph/main')
+  import('./lessons/08-model-loading/main')
 } else {
-  import('./homework/07-scene-graph/main')
+  import('./homework/08-model-loading/main')
 }
