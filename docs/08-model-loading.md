@@ -1,20 +1,22 @@
-# 第 8 课：模型加载
+# 第 8 课技术笔记：模型加载实现细节
 
-> 掌握 GLTF/GLB 模型加载，理解 Draco 压缩和 LOD 策略，学会实现 Loading 进度条和动画播放。
+> 日期：2026-07-27
+> 状态：进行中
 
-## 核心概念
+---
 
-### GLTF 格式
+## GLTF 格式详解
 
-GLTF（GL Transmission Format）是 3D 模型的"JPEG"：
+**GLTF vs GLB**：
 
 | 格式 | 说明 | 适用场景 |
 |------|------|----------|
 | GLTF | JSON 文本，资源分散 | 开发调试 |
 | GLB | 二进制，单文件 | 生产环境 |
 
-### GLTFLoader 使用
+## GLTFLoader 使用
 
+**基础加载**：
 ```typescript
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
@@ -24,7 +26,9 @@ loader.load('/models/suzanne.glb', (gltf) => {
 })
 ```
 
-### LoadingManager 进度管理
+## LoadingManager 进度管理
+
+**关键**：LoadingManager 必须传给 Loader 构造函数，否则 `onLoad` 不会触发。
 
 ```typescript
 const manager = new THREE.LoadingManager()
@@ -32,11 +36,13 @@ manager.onProgress = (url, loaded, total) => {
   console.log(`${(loaded / total * 100).toFixed(0)}%`)
 }
 manager.onLoad = () => { /* 全部加载完成 */ }
+
+const loader = new GLTFLoader(manager)
 ```
 
-### Draco 压缩
+## Draco 压缩
 
-Google 的 3D 几何压缩库，可减小 90%+ 文件大小：
+**原理**：Google 的 3D 几何压缩库，通过量化、预测和熵编码压缩顶点数据。
 
 ```typescript
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
@@ -46,9 +52,24 @@ dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5
 loader.setDRACOLoader(dracoLoader)
 ```
 
-### LOD（Level of Detail）
+## 模型自动缩放和居中
 
-根据距离切换不同精度的模型：
+**算法**：
+```typescript
+// 1. 计算包围盒
+const box = new THREE.Box3().setFromObject(model)
+const size = box.getSize(new THREE.Vector3())
+
+// 2. 缩放
+const maxDim = Math.max(size.x, size.y, size.z)
+model.scale.setScalar(targetSize / maxDim)
+
+// 3. 重新计算包围盒并居中（scale 改变了世界坐标）
+const newBox = new THREE.Box3().setFromObject(model)
+model.position.sub(newBox.getCenter(new THREE.Vector3()))
+```
+
+## LOD（Level of Detail）
 
 ```typescript
 const lod = new THREE.LOD()
@@ -57,22 +78,16 @@ lod.addLevel(lowPoly, 50)    // 远距离：低精度
 scene.add(lod)
 ```
 
-### AnimationMixer 动画播放
+## AnimationMixer 动画播放
 
 ```typescript
 const mixer = new THREE.AnimationMixer(model)
 const action = mixer.clipAction(gltf.animations[0])
+action.setLoop(THREE.LoopRepeat, Infinity)
 action.play()
 
 // 动画循环中更新
 mixer.update(delta)
-```
-
-## 代码结构
-
-```
-src/lessons/08-model-loading/
-└── main.ts    # GLTF 加载 + LoadingManager + 动画控制
 ```
 
 ## API 速查
@@ -86,11 +101,3 @@ src/lessons/08-model-loading/
 | `new THREE.AnimationMixer(model)` | 创建动画混合器 |
 | `action.play()` / `action.stop()` | 播放/停止动画 |
 | `mixer.update(delta)` | 更新动画 |
-
-## 复盘自测
-
-1. **GLTF 和 GLB 的区别？** GLTF 是 JSON 文本，GLB 是二进制单文件，生产环境用 GLB。
-2. **Draco 压缩原理？** 通过量化、预测和熵编码压缩顶点数据，利用网格拓扑结构减少冗余。
-3. **LOD 何时使用？** 大场景中的远景物体，自动切换低精度模型节省性能。
-4. **LoadingManager 作用？** 统一管理多资源加载进度，全部完成后才渲染。
-5. **AnimationMixer.update 为何要 delta？** 保证动画速度与帧率无关。

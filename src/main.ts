@@ -7,7 +7,7 @@
 
 type Mode = 'lessons' | 'homework'
 
-const MODE = 'homework' as Mode
+const MODE = 'lessons' as Mode
 
 // 根据模式显示/隐藏对应的 canvas 容器
 const lessonsCanvas = document.getElementById('canvas')
