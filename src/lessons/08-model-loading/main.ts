@@ -43,18 +43,18 @@ function createLoadingManager(): {
   screen.show()
 
   manager.onLoad = () => {
-    console.log('✅ 所有资源加载完成')
+    console.log('所有资源加载完成')
     screen.hide()
   }
 
   manager.onProgress = (url, itemsLoaded, itemsTotal) => {
     const progress = itemsTotal > 0 ? itemsLoaded / itemsTotal : 0
-    console.log(`📦 加载进度：${(progress * 100).toFixed(1)}% - ${url}`)
+    console.log(`加载进度：${(progress * 100).toFixed(1)}% - ${url}`)
     screen.update(progress)
   }
 
   manager.onError = (url) => {
-    console.error('❌ 加载失败：', url)
+    console.error('加载失败：', url)
   }
 
   return { manager, screen }
@@ -73,7 +73,7 @@ function createGLTFLoader(
     dracoLoader.setDecoderPath('three/examples/jsm/libs/draco/')
     dracoLoader.setDecoderConfig({ type: 'wasm' })
     loader.setDRACOLoader(dracoLoader)
-    console.log('🗜️ Draco 解码器已启用')
+    console.log('Draco 解码器已启用')
   }
 
   return loader
@@ -120,15 +120,15 @@ async function loadModel(
         const size = box.getSize(new THREE.Vector3())
         const center = box.getCenter(new THREE.Vector3())
 
-        console.log('📐 模型原始尺寸：', size)
-        console.log('📍 模型中心点：', center)
+        console.log('模型原始尺寸：', size)
+        console.log('模型中心点：', center)
 
         // 2. 自动缩放
         if (autoScale) {
           const maxDim = Math.max(size.x, size.y, size.z)
           const scale = targetSize / maxDim
           model.scale.setScalar(scale)
-          console.log(`📏 缩放比例：${scale.toFixed(3)} (目标大小：${targetSize})`)
+          console.log(`缩放比例：${scale.toFixed(3)} (目标大小：${targetSize})`)
         }
 
         // 3. 自动居中
@@ -136,14 +136,14 @@ async function loadModel(
           const newBox = new THREE.Box3().setFromObject(model)
           const newCenter = newBox.getCenter(new THREE.Vector3())
           model.position.sub(newCenter)
-          console.log('🎯 已居中到原点')
+          console.log('已居中到原点')
         }
 
         // 3.1 落地
         if (groundSnap) {
           const newBox = new THREE.Box3().setFromObject(model)
           model.position.y -= newBox.min.y
-          console.log('🦶 已贴地')
+          console.log('已贴地')
         }
 
         // 4. 阴影设置
@@ -156,13 +156,13 @@ async function loadModel(
           })
         }
 
-        console.log('✅ 模型加载完成:', url)
+        console.log('模型加载完成:', url)
 
         // 5. 动画混合器
         let mixer: THREE.AnimationMixer | null = null
         if (gltf.animations.length > 0) {
           mixer = new THREE.AnimationMixer(model)
-          console.log(`🎬 发现 ${gltf.animations.length} 个动画：`)
+          console.log(`发现 ${gltf.animations.length} 个动画：`)
           gltf.animations.forEach((clip, i) => {
             console.log(`   ${i + 1}. ${clip.name} (${clip.duration.toFixed(2)}s)`)
           })
@@ -177,11 +177,11 @@ async function loadModel(
       (progress) => {
         if (progress.total > 0) {
           const percent = (progress.loaded / progress.total) * 100
-          console.log(`📦 文件加载：${percent.toFixed(1)}%`)
+          console.log(`文件加载：${percent.toFixed(1)}%`)
         }
       },
       (error) => {
-        console.error('❌ 模型加载失败：', error)
+        console.error('模型加载失败：', error)
         reject(error)
       },
     )
@@ -262,7 +262,7 @@ class AnimationController {
     const { loop = true, speed = 1 } = options
     const action = this.actions.get(name)
     if (!action) {
-      console.warn(`⚠️ 动画 "${name}" 不存在`)
+      console.warn(`动画 "${name}" 不存在`)
       return
     }
 
@@ -278,13 +278,13 @@ class AnimationController {
     action.play()
 
     this.currentAction = action
-    console.log(`▶️ 播放动画：${name}`)
+    console.log(`播放动画：${name}`)
   }
 
   stop() {
     this.actions.forEach((action) => action.stop())
     this.currentAction = null
-    console.log('⏹️ 停止所有动画')
+    console.log('停止所有动画')
   }
 
   update(delta: number) {
@@ -321,9 +321,9 @@ interface ModelEntry {
 }
 
 const MODELS: ModelEntry[] = [
-  { id: 'duck',     label: 'Duck（黄色橡皮鸭）',  url: '/models/Duck.glb',                       hasAnimation: false },
-  { id: 'suzanne',  label: 'Suzanne（猴头）',     url: '/models/suzanne.glb',                    hasAnimation: false },
-  { id: 'watch',    label: 'Watch（戴表动画）',   url: '/models/watch/diegoWatchAnimation4.gltf', hasAnimation: true  },
+  { id: 'duck',label: 'Duck（黄色橡皮鸭）',url: '/models/Duck.glb',hasAnimation: false },
+  { id: 'suzanne', label: 'Suzanne（猴头）', url: '/models/suzanne.glb', hasAnimation: false },
+  { id: 'watch', label: 'Watch（戴表动画）', url: '/models/watch/diegoWatchAnimation4.gltf', hasAnimation: true  },
 ]
 
 /**
@@ -674,7 +674,7 @@ async function init() {
         panel.setValue('animation', '')
       }
     } catch (err) {
-      console.error('❌ 挂载模型失败：', err)
+      console.error('挂载模型失败：', err)
     }
   }
 
