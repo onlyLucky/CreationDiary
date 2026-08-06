@@ -134,7 +134,7 @@ function init() {
    *   near/far   — 阴影的最近/最远距离
    *   left/right/top/bottom — 阴影的上下左右边界
    *
-   * ⚠️ 重要：物体超出这个范围就不会有阴影！
+   * 重要：物体超出这个范围就不会有阴影！
    */
   directionalLight.shadow.mapSize.width = 2048
   directionalLight.shadow.mapSize.height = 2048
@@ -363,7 +363,7 @@ function init() {
    * castShadow = true   — 这个物体会投射阴影
    * receiveShadow = true — 这个物体会接收阴影（显示其他物体投来的阴影）
    *
-   * ⚠️ 两者都需要设置，缺一不可：
+   * 两者都需要设置，缺一不可：
    *   - 灯光.castShadow = true（灯光投射阴影）
    *   - 物体.castShadow = true（物体投射阴影）
    *   - 地面.receiveShadow = true（地面接收阴影）

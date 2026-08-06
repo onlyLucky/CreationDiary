@@ -118,10 +118,10 @@ function init() {
         // needsUpdate = true：告诉 Three.js 材质参数已改变，需要重新编译 shader
         ;(earthMesh.material as THREE.MeshStandardMaterial).needsUpdate = true
       }
-      console.log('✅ 地球日间纹理加载成功')
+      console.log('地球日间纹理加载成功')
     },
     undefined,
-    (error) => console.warn('❌ 地球日间纹理加载失败:', error)
+    (error) => console.warn(' 地球日间纹理加载失败:', error)
   )
 
   // 地球凹凸贴图
@@ -137,17 +137,17 @@ function init() {
         ;(earthMesh.material as THREE.MeshStandardMaterial).bumpScale = 0.05
         ;(earthMesh.material as THREE.MeshStandardMaterial).needsUpdate = true
       }
-      console.log('✅ 地球凹凸贴图加载成功')
+      console.log(' 地球凹凸贴图加载成功')
     },
     (progress) => {
       // 加载进度
       if (progress.total > 0) {
-        console.log(`📡 地球凹凸贴图加载中: ${Math.round(progress.loaded / progress.total * 100)}%`)
+        console.log(` 地球凹凸贴图加载中: ${Math.round(progress.loaded / progress.total * 100)}%`)
       }
     },
     (error) => {
       // 详细错误信息
-      console.warn('❌ 地球凹凸贴图加载失败:', error)
+      console.warn(' 地球凹凸贴图加载失败:', error)
       console.warn('尝试直接访问: http://localhost:3300/textures/earth-bump.jpg')
     }
   )
@@ -163,10 +163,10 @@ function init() {
         (earthMesh.material as THREE.MeshStandardMaterial).roughnessMap = texture
         ;(earthMesh.material as THREE.MeshStandardMaterial).needsUpdate = true
       }
-      console.log('✅ 地球高光贴图加载成功')
+      console.log(' 地球高光贴图加载成功')
     },
     undefined,
-    (error) => console.warn('❌ 地球高光贴图加载失败:', error)
+    (error) => console.warn(' 地球高光贴图加载失败:', error)
   )
 
   // 金属锈蚀纹理（用于金属球）
@@ -182,10 +182,10 @@ function init() {
         (metalSphere.material as THREE.MeshStandardMaterial).map = texture
         ;(metalSphere.material as THREE.MeshStandardMaterial).needsUpdate = true
       }
-      console.log('✅ 金属锈蚀纹理加载成功')
+      console.log(' 金属锈蚀纹理加载成功')
     },
     undefined,
-    (error) => console.warn('❌ 金属锈蚀纹理加载失败:', error)
+    (error) => console.warn(' 金属锈蚀纹理加载失败:', error)
   )
 
   // 木地板纹理（用于地面）
@@ -201,10 +201,10 @@ function init() {
         (ground.material as THREE.MeshStandardMaterial).map = texture
         ;(ground.material as THREE.MeshStandardMaterial).needsUpdate = true
       }
-      console.log('✅ 木地板纹理加载成功')
+      console.log(' 木地板纹理加载成功')
     },
     undefined,
-    (error) => console.warn('❌ 木地板纹理加载失败:', error)
+    (error) => console.warn(' 木地板纹理加载失败:', error)
   )
 
   // ========== 3. CubeTextureLoader 加载天空盒 ==========
@@ -244,10 +244,10 @@ function init() {
       // 设置环境贴图，让金属物体反射天空盒
       // manager.scene.environment = envMap
 
-      console.log('✅ 天空盒加载成功')
+      console.log(' 天空盒加载成功')
     },
     undefined,
-    (error) => console.warn('❌ 天空盒加载失败:', error)
+    (error) => console.warn(' 天空盒加载失败:', error)
   )
 
   // ========== 4. RGBELoader 加载 HDRI 环境贴图 ==========
@@ -273,10 +273,10 @@ function init() {
       // HDRI 作为环境光照（不影响背景）
       manager.scene.environment = texture
 
-      console.log('✅ HDRI 环境贴图加载成功')
+      console.log(' HDRI 环境贴图加载成功')
     },
     undefined,
-    (error) => console.warn('❌ HDRI 环境贴图加载失败:', error)
+    (error) => console.warn(' HDRI 环境贴图加载失败:', error)
   )
 
   // ========== 5. 创建场景物体 ==========
@@ -512,7 +512,7 @@ function init() {
       checkerTexture.repeat.set(3, 3)
       checkerTexture.needsUpdate = true
 
-      console.log(`🔄 环绕模式切换为: ${value}, repeat 已设为 (3,3)`)
+      console.log(` 环绕模式切换为: ${value}, repeat 已设为 (3,3)`)
     },
   })
 

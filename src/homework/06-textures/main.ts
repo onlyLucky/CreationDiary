@@ -55,10 +55,10 @@ function init() {
       texture.mapping = THREE.EquirectangularReflectionMapping
       manager.scene.background = texture  // HDRI 背景
       manager.scene.environment = texture  // 环境光照，PBR 材质自动采样
-      console.log('✅ HDRI 环境贴图加载成功')
+      console.log(' HDRI 环境贴图加载成功')
     },
     undefined,
-    (error) => console.warn('❌ HDRI 环境贴图加载失败:', error)
+    (error) => console.warn(' HDRI 环境贴图加载失败:', error)
   )
 
   /* ========== 2. 灯光布局（20分）==========
@@ -134,13 +134,13 @@ function init() {
       })
 
       manager.scene.add(watchModel)
-      console.log('✅ 模型加载完成，已居中展示，金属质感已调整')
+      console.log(' 模型加载完成，已居中展示，金属质感已调整')
     },
     (progress) => {
       const percent = (progress.loaded / progress.total * 100).toFixed(0)
       console.log(`加载进度: ${percent}%`)
     },
-    (error) => console.error('❌ 模型加载失败:', error)
+    (error) => console.error(' 模型加载失败:', error)
   )
 
   /* ========== 4. 镜面地面（15分）==========

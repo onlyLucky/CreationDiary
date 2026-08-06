@@ -229,7 +229,7 @@ function init() {
       isPlaying ? timeline.play() : timeline.pause()
       // 更新按钮文字
       const btn = document.getElementById('control-play-pause')
-      if (btn) btn.textContent = isPlaying ? '⏸ 暂停' : '▶ 播放'
+      if (btn) btn.textContent = isPlaying ? '暂停' : '播放'
     },
   })
 
