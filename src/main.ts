@@ -22,7 +22,7 @@ if (homeworkContainer) {
 
 // 根据模式动态导入对应的模块
 if (MODE === 'lessons') {
-  import('./lessons/10-glsl-basics/main')
+  import('./lessons/11-glsl-math/main')
 } else {
-  import('./homework/10-glsl-basics/main')
+  import('./homework/11-glsl-math/main')
 }

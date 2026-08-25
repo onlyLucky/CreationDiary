@@ -263,6 +263,58 @@ const fresnelFragmentShader = /* glsl */ `
   }
 `
 
+/* ========== 3.5 RawShaderMaterial 示例 ========== */
+
+/**
+ * RawShaderMaterial 顶点着色器
+ *
+ * 与 ShaderMaterial 的关键区别：
+ * - ShaderMaterial：Three.js 自动注入内置 attribute（position/uv/normal）和
+ *   uniform（projectionMatrix/modelViewMatrix/modelMatrix/normalMatrix），
+ *   并自动添加精度声明，代码简洁
+ * - RawShaderMaterial：什么都不注入，必须手动声明所有内置 attribute、uniform
+ *   和精度声明，完全掌控 shader 头部，但代码冗长、易出错
+ *
+ * 这一组着色器手动声明了：
+ * - precision highp float（精度声明，否则部分平台编译失败）
+ * - attribute vec3 position / vec2 uv（顶点数据）
+ * - uniform mat4 modelViewMatrix / projectionMatrix（内置矩阵）
+ */
+const rawVertexShader = /* glsl */ `
+  precision highp float;
+
+  attribute vec3 position;
+  attribute vec2 uv;
+
+  uniform mat4 modelViewMatrix;
+  uniform mat4 projectionMatrix;
+
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+const rawFragmentShader = /* glsl */ `
+  precision highp float;
+
+  uniform float uTime;
+  uniform vec3 uColor;
+
+  varying vec2 vUv;
+
+  void main() {
+    /**
+     * 简单的脉冲效果：沿 X 方向做周期性明暗变化
+     * 与 ShaderMaterial 示例的渐变球体对比，观察两者写法差异
+     */
+    float pulse = (sin(vUv.x * 6.2831 + uTime) + 1.0) * 0.5;
+    gl_FragColor = vec4(uColor * pulse, 1.0);
+  }
+`
+
 /* ========== 4. 创建 ShaderMaterial 物体 ========== */
 
 /**
@@ -363,6 +415,38 @@ function createFresnelSphere(): THREE.Mesh {
   return mesh
 }
 
+/**
+ * 创建 RawShaderMaterial 示例球体
+ *
+ * 与上方三个 ShaderMaterial 物体对比：
+ * - 三个 ShaderMaterial 在 shader 里直接写 gl_Position = projectionMatrix *
+ *   modelViewMatrix * vec4(position, 1.0)，因为内置变量已由 Three.js 注入
+ * - RawShaderMaterial 的这个球体，着色器里必须「手动」声明 position/uv/
+ *   modelViewMatrix/projectionMatrix 和精度，效果完全一样，但写起来更啰嗦
+ *
+ * 结论：日常开发优先用 ShaderMaterial；只有需要完全自定义 shader 头部
+ * （如自定义精度、int 属性、多 uniform 前缀）时才用 RawShaderMaterial。
+ */
+function createRawSphere(): THREE.Mesh {
+  const geometry = new THREE.SphereGeometry(1.5, 64, 64)
+
+  const material = new THREE.RawShaderMaterial({
+    vertexShader: rawVertexShader,
+    fragmentShader: rawFragmentShader,
+    uniforms: {
+      /** uTime：动画时间，每帧由 JS 更新 */
+      uTime: { value: 0 },
+      /** uColor：脉冲效果的基础色 */
+      uColor: { value: new THREE.Color('#fdcb6e') },
+    },
+  })
+
+  const mesh = new THREE.Mesh(geometry, material)
+  /** 放在上方，与左右两个 ShaderMaterial 球体形成对比 */
+  mesh.position.y = 2.5
+  return mesh
+}
+
 /* ========== 5. 初始化场景 ========== */
 
 /**
@@ -412,10 +496,13 @@ function init() {
   const gradientSphere = createGradientSphere()
   const wavePlane = createWavePlane()
   const fresnelSphere = createFresnelSphere()
+  /** RawShaderMaterial 示例球体（上方，演示手动声明 vs 自动注入的区别） */
+  const rawSphere = createRawSphere()
 
   manager.scene.add(gradientSphere)
   manager.scene.add(wavePlane)
   manager.scene.add(fresnelSphere)
+  manager.scene.add(rawSphere)
 
   /* ========== 控制面板 ========== */
   const panel = new ControlPanel()
@@ -496,6 +583,23 @@ function init() {
     },
   })
 
+  // RawShaderMaterial 示例球颜色
+  panel.addSelect({
+    id: 'raw-color',
+    label: 'Raw 球颜色',
+    type: 'select',
+    options: [
+      { value: '#fdcb6e', label: '暖黄' },
+      { value: '#00cec9', label: '青色' },
+      { value: '#fd79a8', label: '粉红' },
+      { value: '#dfe6e9', label: '银灰' },
+    ],
+    defaultValue: '#fdcb6e',
+    onChange: (value) => {
+      (rawSphere.material as THREE.RawShaderMaterial).uniforms.uColor.value.set(value)
+    },
+  })
+
   // 波浪颜色
   panel.addSelect({
     id: 'wave-color',
@@ -536,6 +640,13 @@ function init() {
     fresnelMat.uniforms.uCameraPosition.value.copy(manager.camera.position)
 
     /**
+     * 更新 RawShaderMaterial 的 uTime
+     * 注意：uniforms 结构两者相同，区别只在 shader 代码里是否手动声明内置变量
+     */
+    const rawMat = rawSphere.material as THREE.RawShaderMaterial
+    rawMat.uniforms.uTime.value = elapsed
+
+    /**
      * 渐变球体缓慢旋转，增加视觉动感
      * 这里用 JS 控制旋转，而不是在 shader 里做
      * 因为旋转是物体级别的变换，属于 modelMatrix 的职责
@@ -556,10 +667,11 @@ function init() {
   console.log('  - varying：从顶点着色器插值传到片元着色器的变量')
   console.log('  - attribute：每个顶点不同的数据（position、normal、uv）')
   console.log('')
-  console.log('三个 ShaderMaterial 示例：')
+  console.log('四个 ShaderMaterial 示例：')
   console.log('  1. 渐变球体：UV + 时间 → mix() 颜色混合')
   console.log('  2. 波浪平面：顶点变形 + 漫反射光照')
   console.log('  3. Fresnel 球体：边缘发光效果')
+  console.log('  4. RawShaderMaterial 球体：手动声明内置变量（对比）')
   console.log('')
   console.log('交互控制：')
   console.log('  - 切换渐变颜色 A / B')
