@@ -32,6 +32,7 @@ import * as THREE from 'three'
 import { SceneManager } from '@/core/SceneManager'
 import { ControlPanel } from '@/core/ControlPanel'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import gsap from 'gsap'
 
 /* ========== 1. GLSL 噪声工具函数 ========== */
 
@@ -287,6 +288,13 @@ const distortFragmentShader = /* glsl */ `
 
 /* ========== 6. 创建面板 ========== */
 
+/**
+ * 创建消融面板
+ *
+ * - SphereGeometry(1.5, 64, 64)：高面数球体，消融边缘更平滑
+ * - 位置 x = -6：四个面板最左侧
+ * - 可调参数：uThreshold（消融阈值）、uEdgeWidth（边缘发光宽度）
+ */
 function createDissolvePanel(): THREE.Mesh {
   const geometry = new THREE.SphereGeometry(1.5, 64, 64)
   const material = new THREE.ShaderMaterial({
@@ -306,6 +314,14 @@ function createDissolvePanel(): THREE.Mesh {
   return mesh
 }
 
+/**
+ * 创建全息面板
+ *
+ * - IcosahedronGeometry(1.5, 3)：低细分二十面体，棱角分明，更有全息投影感
+ * - transparent: true：启用半透明混合（Fresnel 边缘透明）
+ * - depthWrite: false：不写入深度缓冲，避免透明物体排序问题
+ * - 位置 x = -2：左数第二个
+ */
 function createHologramPanel(): THREE.Mesh {
   const geometry = new THREE.IcosahedronGeometry(1.5, 3)
   const material = new THREE.ShaderMaterial({
@@ -326,6 +342,13 @@ function createHologramPanel(): THREE.Mesh {
   return mesh
 }
 
+/**
+ * 创建 Fresnel 可视化面板
+ *
+ * - SphereGeometry(1.5, 64, 64)：高面数球体，Fresnel 过渡更平滑
+ * - 位置 x = 2：右数第二个
+ * - 颜色由 uColorA（中心色）与 uColorB（边缘色）按 Fresnel 值插值
+ */
 function createFresnelPanel(): THREE.Mesh {
   const geometry = new THREE.SphereGeometry(1.5, 64, 64)
   const material = new THREE.ShaderMaterial({
@@ -343,6 +366,13 @@ function createFresnelPanel(): THREE.Mesh {
   return mesh
 }
 
+/**
+ * 创建扭曲面板
+ *
+ * - IcosahedronGeometry(1.5, 64)：高细分二十面体，顶点多，扭曲细节更丰富
+ * - 位置 x = 6：四个面板最右侧
+ * - 可调参数：uDistortScale（噪声频率）、uDistortStrength（扭曲强度）
+ */
 function createDistortPanel(): THREE.Mesh {
   const geometry = new THREE.IcosahedronGeometry(1.5, 64)
   const material = new THREE.ShaderMaterial({
@@ -362,6 +392,24 @@ function createDistortPanel(): THREE.Mesh {
 
 /* ========== 7. 初始化场景 ========== */
 
+/**
+ * 初始化场景
+ *
+ * 场景图结构：
+ * scene (根节点)
+ * ├── ambientLight          (环境光)
+ * ├── dissolvePanel         (消融面板，最左侧)
+ * │   └── SphereGeometry + ShaderMaterial (噪声遮罩 + discard)
+ * ├── holoPanel             (全息面板，左二)
+ * │   └── IcosahedronGeometry + ShaderMaterial (Fresnel + 扫描线)
+ * ├── fresnelPanel          (Fresnel 面板，右二)
+ * │   └── SphereGeometry + ShaderMaterial (Fresnel 可视化)
+ * └── distortPanel          (扭曲面板，最右侧)
+ *     └── IcosahedronGeometry + ShaderMaterial (噪声顶点偏移)
+ *
+ * 四个面板在 X 轴上并排（间距 4），相机放在 z = 14 处整体观看。
+ * 控制面板根据选择的面板显示/隐藏对应滑块。
+ */
 function init() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
   const manager = new SceneManager({ canvas, bgColor: '#0a0a0a', fov: 50 })
@@ -373,9 +421,35 @@ function init() {
   controls.enableDamping = true
   controls.dampingFactor = 0.05
 
+  /**
+   * 各面板的相机聚焦点（all 回到全景）
+   *
+   * 面板在 X 轴上并排（间距 4），相机 z = 14。
+   * 选中单个面板时相机平滑移动过去，让该面板居中显示。
+   */
+  const panelX: Record<string, number> = {
+    all: 0,
+    dissolve: -6,
+    holo: -2,
+    fresnel: 2,
+    distort: 6,
+  }
+
+  /** 切换面板时平滑移动相机，让选中面板居中 */
+  const flyTo = (value: string) => {
+    const x = panelX[value] ?? 0
+    gsap.to(controls.target, { x, y: 0, z: 0, duration: 0.8, ease: 'power2.inOut' })
+    gsap.to(manager.camera.position, { x, y: 0, z: 14, duration: 0.8, ease: 'power2.inOut', onUpdate: () => controls.update() })
+  }
+
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0)
   manager.scene.add(ambientLight)
 
+  /**
+   * 四个面板在 X 轴上并排排列（间距 4）：
+   *   x：-6      -2      2      6
+   *       消融    全息    Fresnel  扭曲
+   */
   const dissolvePanel = createDissolvePanel()
   const holoPanel = createHologramPanel()
   const fresnelPanel = createFresnelPanel()
@@ -389,6 +463,10 @@ function init() {
   /* ========== 控制面板 ========== */
   const panel = new ControlPanel('controls')
 
+  /**
+   * 面板选择器 + 滑块可见性联动：
+   * 选择「全部」时所有滑块可见，选择单个面板时只显示对应滑块
+   */
   const updateSliderVisibility = (panelValue: string) => {
     const show = (el: HTMLElement | undefined, visible: boolean) => {
       if (el?.parentElement) el.parentElement.style.display = visible ? '' : 'none'
@@ -419,6 +497,8 @@ function init() {
       fresnelPanel.visible = value === 'all' || value === 'fresnel'
       distortPanel.visible = value === 'all' || value === 'distort'
       updateSliderVisibility(value)
+      /** 相机平滑移动，让选中面板居中 */
+      flyTo(value)
     },
   })
 
@@ -455,12 +535,18 @@ function init() {
 
   function animate() {
     requestAnimationFrame(animate)
+    /**
+     * t：累计时间 × 全局动画速度
+     * 用累计时间驱动 shader 的 sin()/噪声采样，动画才能连续
+     */
     const t = clock.getElapsedTime() * animationSpeed;
 
+    /** 更新需要动画的三个面板（Fresnel 面板是静态的，无需更新 uTime） */
     (dissolvePanel.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     (holoPanel.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     (distortPanel.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
 
+    /** 全息与扭曲面板缓慢自转，增强立体感 */
     holoPanel.rotation.y = t * 0.3
     distortPanel.rotation.y = t * 0.15
 

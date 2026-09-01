@@ -90,6 +90,20 @@ const rippleFragmentShader = /* glsl */ `
 
 /* ========== 初始化场景 ========== */
 
+/**
+ * 初始化场景
+ *
+ * 场景结构：
+ * scene (根节点)
+ * ├── ambientLight  (环境光)
+ * └── 5 个交互平面  (PlaneGeometry + ShaderMaterial，带涟漪/hover 效果)
+ *
+ * 交互流程：
+ * - mousemove：把鼠标坐标归一化到 [-1, 1]，Raycaster 检测悬停
+ * - 悬停：把鼠标的 UV 传给着色器 → 平面跟随鼠标微微凸起
+ * - 点击：记录时间触发涟漪（sin 波纹随时间扩散衰减）
+ * - 相机位置随鼠标轻微偏移 → 视差效果
+ */
 function init() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
   const manager = new SceneManager({ canvas, bgColor: '#080808', fov: 60 })
@@ -101,6 +115,7 @@ function init() {
   controls.enableDamping = true
 
   /* ========== 场景物体 ========== */
+  /** mouse 初始化为 (‑999, ‑999)，确保页面刚加载时不会误触发拾取 */
   const raycaster = new THREE.Raycaster()
   const mouse = new THREE.Vector2(-999, -999)
 
@@ -108,7 +123,13 @@ function init() {
   const colors = [0xff6644, 0x44ff66, 0x4466ff, 0xff44ff, 0xffff44]
   const originalPositions: THREE.Vector3[] = []
 
-  /** 创建 5 个可交互的平面 */
+  /**
+   * 创建 5 个可交互的平面
+   * - PlaneGeometry(3, 3, 64, 64)：高细分平面，顶点够多，涟漪形变更平滑
+   * - uMouse：鼠标在平面上的 UV 坐标（由 Raycaster 的 hit.uv 更新）
+   * - uRippleTime：点击触发涟漪的时刻；uHover：悬停高亮强度
+   * - 沿 X 轴均匀排列：(i - 2) * 3.5 → x = -7, -3.5, 0, 3.5, 7
+   */
   for (let i = 0; i < 5; i++) {
     const geo = new THREE.PlaneGeometry(3, 3, 64, 64)
     const mat = new THREE.ShaderMaterial({
@@ -135,14 +156,17 @@ function init() {
   manager.scene.add(new THREE.AmbientLight(0xffffff, 0.5))
 
   /* ========== 鼠标交互 ========== */
+  /** 当前被悬停的平面；clickTime 记录最近一次点击的时间（负值表示从未点击） */
   let hoveredMesh: THREE.Mesh | null = null
   let clickTime = -10
 
+  /** 把鼠标屏幕坐标归一化到 NDC（[-1, 1]），供 Raycaster 使用 */
   canvas.addEventListener('mousemove', (e) => {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1
   })
 
+  /** 点击当前悬停的平面时，记录触发时刻并传给着色器生成涟漪 */
   canvas.addEventListener('click', () => {
     if (hoveredMesh) {
       clickTime = clock.getElapsedTime()

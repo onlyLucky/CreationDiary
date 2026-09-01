@@ -34,10 +34,21 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 /* ========== 1. 星空粒子（基础 PointsMaterial） ========== */
 
+/**
+ * 创建星空粒子 — 最简单的 PointsMaterial 用法
+ *
+ * 原理：
+ * - BufferGeometry 只存一个 position 属性（count 个粒子的三维坐标）
+ * - PointsMaterial 用固定大小（size）渲染所有点，颜色统一
+ * - 位置在 [-10, 10] 立方体内随机分布
+ *
+ * @param count - 粒子数量
+ */
 function createStarField(count: number): THREE.Points {
   const geometry = new THREE.BufferGeometry()
   const positions = new Float32Array(count * 3)
 
+  /** 随机填充 20×20×20 立方体内的坐标 */
   for (let i = 0; i < count; i++) {
     positions[i * 3] = (Math.random() - 0.5) * 20
     positions[i * 3 + 1] = (Math.random() - 0.5) * 20
@@ -46,6 +57,7 @@ function createStarField(count: number): THREE.Points {
 
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
 
+  /** sizeAttenuation: true — 远处的粒子看起来更小（透视衰减） */
   const material = new THREE.PointsMaterial({
     color: 0xffffff,
     size: 0.05,
@@ -110,6 +122,16 @@ const particleFragmentShader = /* glsl */ `
   }
 `
 
+/**
+ * 创建自定义 Shader 粒子
+ *
+ * 与星空粒子的区别：
+ * - 每个粒子有独立的 aSize（大小）、aBirthTime（出生时间）、aColor（颜色）属性
+ * - 顶点着色器用 gl_PointSize 控制大小、varying 传颜色/透明度
+ * - 粒子按生命周期循环：出现 → 变大变亮 → 缩小淡出 → 重新出生
+ *
+ * @param count - 粒子数量
+ */
 function createShaderParticles(count: number): THREE.Points {
   const geometry = new THREE.BufferGeometry()
   const positions = new Float32Array(count * 3)
@@ -117,6 +139,7 @@ function createShaderParticles(count: number): THREE.Points {
   const birthTimes = new Float32Array(count)
   const colors = new Float32Array(count * 3)
 
+  /** 随机初始化每个粒子的位置 / 大小 / 出生时间 / 颜色（偏蓝调） */
   for (let i = 0; i < count; i++) {
     positions[i * 3] = (Math.random() - 0.5) * 8
     positions[i * 3 + 1] = Math.random() * 4
@@ -128,11 +151,17 @@ function createShaderParticles(count: number): THREE.Points {
     colors[i * 3 + 2] = 0.8 + Math.random() * 0.2
   }
 
+  /** 把自定义 attribute 写入几何体（aSize/aBirthTime/aColor 对应 shader 里的变量名） */
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
   geometry.setAttribute('aBirthTime', new THREE.BufferAttribute(birthTimes, 1))
   geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3))
 
+  /**
+   * 透明渲染配置：
+   * - transparent + depthWrite: false：半透明粒子互不遮挡
+   * - AdditiveBlending：加法混合，重叠区域更亮，适合发光粒子
+   */
   const material = new THREE.ShaderMaterial({
     vertexShader: particleVertexShader,
     fragmentShader: particleFragmentShader,
@@ -212,12 +241,23 @@ const flowFragmentShader = /* glsl */ `
   }
 `
 
+/**
+ * 创建流动粒子 — 顶点着色器用噪声场驱动运动
+ *
+ * 原理：
+ * - 每个粒子有 aSpeed（速度倍数）、aOffset（相位偏移）属性
+ * - 顶点着色器里用 2D 噪声采样当前位置的「风向」，决定 x/z 偏移
+ * - y 坐标随时间循环上升，越过顶部后回到底部（mod 循环）
+ *
+ * @param count - 粒子数量
+ */
 function createFlowParticles(count: number): THREE.Points {
   const geometry = new THREE.BufferGeometry()
   const positions = new Float32Array(count * 3)
   const speeds = new Float32Array(count)
   const offsets = new Float32Array(count)
 
+  /** 随机位置；speed 让粒子快慢不一，offset 打乱流动起始相位 */
   for (let i = 0; i < count; i++) {
     positions[i * 3] = (Math.random() - 0.5) * 10
     positions[i * 3 + 1] = (Math.random() - 0.5) * 8
@@ -247,6 +287,23 @@ function createFlowParticles(count: number): THREE.Points {
 
 /* ========== 4. 初始化场景 ========== */
 
+/**
+ * 初始化场景
+ *
+ * 场景图结构：
+ * scene (根节点)
+ * ├── starField        (星空粒子，最左侧，x = -6)
+ * │   └── PointsMaterial (固定大小白点，随机分布)
+ * ├── shaderParticles  (自定义 Shader 粒子，中央)
+ * │   └── ShaderMaterial (大小/颜色/透明度随生命周期变化)
+ * └── flowParticles    (流动粒子，最右侧，x = 6)
+ *     └── ShaderMaterial (噪声场驱动的流动效果)
+ *
+ * 三种粒子分别演示：
+ * 1. PointsMaterial：最简单的粒子渲染
+ * 2. ShaderMaterial：自定义 attribute + 生命周期动画
+ * 3. 流动粒子：顶点着色器里做噪声场运动计算
+ */
 function init() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
   const manager = new SceneManager({ canvas, bgColor: '#050510', fov: 60 })
@@ -257,7 +314,7 @@ function init() {
   const controls = new OrbitControls(manager.camera, canvas)
   controls.enableDamping = true
 
-  /** 创建三种粒子 */
+  /** 创建三种粒子（左右两个偏移到两侧，中央的 Shader 粒子保持原位） */
   const starField = createStarField(5000)
   starField.position.set(-6, 0, 0)
   manager.scene.add(starField)
@@ -272,6 +329,7 @@ function init() {
   /* ========== 控制面板 ========== */
   const panel = new ControlPanel('controls')
 
+  /** 流动粒子速度 / 自定义粒子生命周期（uMaxLife 越大，粒子存活越久） */
   panel.addSlider({ id: 'flow-speed', label: '流动速度', type: 'slider', min: 0, max: 3, step: 0.1, defaultValue: 1.0,
     onChange: (v: number) => { (flowParticles.material as THREE.ShaderMaterial).uniforms.uFlowSpeed.value = v } })
   panel.addSlider({ id: 'particle-life', label: '生命周期', type: 'slider', min: 1, max: 10, step: 0.5, defaultValue: 5.0,
@@ -288,10 +346,11 @@ function init() {
     requestAnimationFrame(animate)
     const t = clock.getElapsedTime() * animationSpeed;
 
+    /** 两个 Shader 粒子面板需要每帧更新 uTime（星空粒子是静态的） */
     (shaderParticles.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     (flowParticles.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
 
-    /** 星空缓慢旋转 */
+    /** 星空粒子绕 Y 轴缓慢旋转，增加星空流动感 */
     starField.rotation.y = t * 0.02
 
     controls.update()

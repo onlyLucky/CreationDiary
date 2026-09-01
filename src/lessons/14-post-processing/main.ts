@@ -126,6 +126,21 @@ const ColorCorrectionShader = {
 
 /* ========== 3. 初始化场景 ========== */
 
+/**
+ * 初始化场景
+ *
+ * 场景结构：
+ * scene (根节点)
+ * ├── gridHelper         (网格地面)
+ * ├── 5 个发光球体        (MeshStandardMaterial + 高 emissive，用于触发 Bloom)
+ * ├── ambientLight       (环境光)
+ * └── directionalLight   (方向光)
+ *
+ * 渲染管线（后处理链，按顺序执行）：
+ * RenderPass（场景） → UnrealBloomPass（辉光） → ShaderPass（色彩校正） → ShaderPass（暗角）
+ * - 每个 Pass 把上一 Pass 的输出作为输入，类似「滤镜链」
+ * - 最终显示的是后处理链的输出，而不是直接渲染场景
+ */
 function init() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
   const manager = new SceneManager({ canvas, bgColor: '#000000', fov: 60 })
@@ -154,6 +169,12 @@ function init() {
     [-1.5, 0.8, 2], [1.5, 0.8, -2],
   ]
 
+  /**
+   * 沿 X 轴依次放置 5 个发光球体
+   * - clone()：每个球体使用独立的材质实例，方便单独设置颜色
+   * - setHSL 按 x 坐标映射色相，从左到右依次红→黄→绿→青→蓝
+   * - emissiveIntensity = 2.0 的高亮度是 Bloom 辉光的来源
+   */
   positions.forEach(([x, y, z]) => {
     const sphere = new THREE.Mesh(sphereGeo, emissiveMaterial.clone())
     sphere.position.set(x, y, z)
@@ -202,12 +223,14 @@ function init() {
   /* ========== 控制面板 ========== */
   const panel = new ControlPanel('controls')
 
+  /** Bloom 参数：阈值越高，只有越亮的区域才会发光 */
   panel.addSlider({ id: 'bloom-strength', label: 'Bloom 强度', type: 'slider', min: 0, max: 3, step: 0.05, defaultValue: 1.5,
     onChange: (v: number) => { bloomPass.strength = v } })
   panel.addSlider({ id: 'bloom-radius', label: 'Bloom 半径', type: 'slider', min: 0, max: 1, step: 0.01, defaultValue: 0.4,
     onChange: (v: number) => { bloomPass.radius = v } })
   panel.addSlider({ id: 'bloom-threshold', label: 'Bloom 阈值', type: 'slider', min: 0, max: 1, step: 0.01, defaultValue: 0.85,
     onChange: (v: number) => { bloomPass.threshold = v } })
+  /** 色彩校正参数：亮度 / 对比度 / 饱和度（作用于 colorPass） */
   panel.addSlider({ id: 'brightness', label: '亮度', type: 'slider', min: -0.5, max: 0.5, step: 0.01, defaultValue: 0,
     onChange: (v: number) => { colorPass.uniforms.uBrightness.value = v } })
   panel.addSlider({ id: 'contrast', label: '对比度', type: 'slider', min: 0.5, max: 2, step: 0.05, defaultValue: 1.0,
@@ -224,7 +247,12 @@ function init() {
     requestAnimationFrame(animate)
     const t = clock.getElapsedTime()
 
-    /** 球体浮动动画 */
+    /**
+     * 球体浮动动画
+     * - 遍历场景中所有子对象（网格地面不是 Mesh，会被 instanceof 过滤掉）
+     * - 每个球体在初始 y 基础上叠加 sin 正弦波上下浮动
+     * - 相位 i 让各球体错开，形成波浪般的起伏
+     */
     manager.scene.children.forEach((child, i) => {
       if (child instanceof THREE.Mesh) {
         child.position.y = positions[i]?.[1] ?? 1 + Math.sin(t * 2 + i) * 0.3
@@ -232,6 +260,7 @@ function init() {
     })
 
     controls.update()
+    /** 用 composer.render() 替代 renderer.render()，渲染整条后处理链 */
     composer.render()
   }
 

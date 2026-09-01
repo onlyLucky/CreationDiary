@@ -137,6 +137,7 @@ function init() {
   /* ========== 动画循环 ========== */
   function animate() {
     requestAnimationFrame(animate)
+    /** GSAP ScrollTrigger 在 rAF 内自动更新进度，这里只需照常渲染 */
     controls.update()
     manager.renderer.render(manager.scene, manager.camera)
   }

@@ -34,6 +34,7 @@ import * as THREE from 'three'
 import { SceneManager } from '@/core/SceneManager'
 import { ControlPanel } from '@/core/ControlPanel'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import gsap from 'gsap'
 
 /* ========== 1. GLSL 噪声工具函数 ========== */
 
@@ -185,11 +186,15 @@ const perlinFragmentShader = /* glsl */ `
     n = n * 0.5 + 0.5;
 
     /**
-     * 颜色映射：蓝色 → 白色
-     * - mix(vec3(0.1, 0.2, 0.8), vec3(1.0), n)
-     * - n = 0 → 深蓝色，n = 1 → 白色
+     * 颜色映射：纯灰度渐变（白 → 浅灰 → 中灰）
+     *
+     * 参考 demo.jpg 的第 1 栏：技术底层用灰度呈现，
+     * 不赋予物理色彩，强调噪声本身的「连续明暗」。
+     * - n = 0 → 中灰，n = 1 → 纯白
+     * - 轻微扩展对比度，让浮雕感更明显
      */
-    vec3 color = mix(vec3(0.1, 0.2, 0.8), vec3(1.0), n);
+    n = smoothstep(0.15, 0.85, n);
+    vec3 color = vec3(mix(0.35, 1.0, n));
 
     gl_FragColor = vec4(color, 1.0);
   }
@@ -238,10 +243,16 @@ const fbmFragmentShader = /* glsl */ `
     /** 映射到 [0, 1] */
     n = n * 0.5 + 0.5;
 
-    /** 暖色系映射：深棕 → 金黄 */
-    vec3 colorA = vec3(0.15, 0.08, 0.02);
-    vec3 colorB = vec3(0.95, 0.75, 0.3);
-    vec3 color = mix(colorA, colorB, n);
+    /**
+     * 颜色映射：高对比黑白（灰度密集纹理）
+     *
+     * 参考 demo.jpg 的第 2 栏：仍用灰度，但施加高对比
+     * stretch，让多层细节（octaves 叠加的自相似纹理）清晰可辨。
+     * 与第 1 栏的差异：这里已经看到了「分形细节」，
+     * 但尚未赋予物理色彩。
+     */
+    n = smoothstep(0.2, 0.8, n);
+    vec3 color = vec3(n);
 
     gl_FragColor = vec4(color, 1.0);
   }
@@ -310,14 +321,22 @@ const cloudFragmentShader = /* glsl */ `
     vec2 uv = vUv;
 
     if (uv.y > 0.5) {
-      /* ========== 上半部分：云雾 ========== */
+      /* ========== 上半部分：冷灰白烟雾 ========== */
       vec2 cloudUV = vec2(uv.x, (uv.y - 0.5) * 2.0);
       float c = cloud(cloudUV, uTime);
 
-      /** 天空背景 → 白色云雾 */
-      vec3 skyColor = vec3(0.15, 0.25, 0.55);
-      vec3 cloudColor = vec3(0.9, 0.95, 1.0);
+      /**
+       * 参考 demo.jpg 的第 3 栏：
+       * 顶部是冷色的灰白烟雾（技术 → 应用的第一抹色彩，
+       * 由下而上从火焰的橙红过渡到冷烟）。
+       * - 深冷灰色天空 → 冷白烟雾
+       */
+      vec3 skyColor = vec3(0.22, 0.25, 0.32);
+      vec3 cloudColor = vec3(0.9, 0.93, 0.97);
       vec3 color = mix(skyColor, cloudColor, c);
+
+      /** 冷烟高光处偏亮白，配合烟雾边缘 */
+      color += vec3(0.05) * smoothstep(0.85, 1.0, c);
 
       gl_FragColor = vec4(color, 1.0);
     } else {
@@ -325,7 +344,10 @@ const cloudFragmentShader = /* glsl */ `
       vec2 fireUV = vec2(uv.x, uv.y * 2.0);
       float f = fire(fireUV, uTime);
 
-      /** 黑色背景 → 橙红色火焰 */
+      /**
+       * 底部火焰：橙红 → 亮黄热芯
+       * 与上方冷烟形成强烈的冷暖对比
+       */
       vec3 bgColor = vec3(0.02, 0.01, 0.0);
       vec3 fireColor = vec3(1.0, 0.4, 0.05);
       vec3 hotColor = vec3(1.0, 0.9, 0.3);
@@ -415,45 +437,61 @@ const deformVertexShader = /* glsl */ `
 const deformFragmentShader = /* glsl */ `
   uniform float uTime;
 
+  uniform vec3 uBaseColor;
+  uniform float uMetalness;
+  uniform float uRoughness;
+
   varying vec3 vNormal;
   varying vec3 vPosition;
   varying float vNoise;
 
+  /**
+   * 伪环境贴图 — 用球谐近似一个冷色工作室环境
+   *
+   * 参考 demo.jpg 的第 4 栏：金属球需要环境反光才有金属感。
+   * 这里不引入真正的 envMap，而是用 vNormal 方向采样一个
+   * 上下渐变（上冷白天空、下深蓝）来近似反射。
+   */
+  vec3 envSample(vec3 n) {
+    vec3 sky = vec3(0.85, 0.9, 1.0);
+    vec3 ground = vec3(0.05, 0.08, 0.14);
+    return mix(ground, sky, n.y * 0.5 + 0.5);
+  }
+
   void main() {
-    /**
-     * 简单光照计算
-     *
-     * - lightDir：从右上方打来的方向光
-     * - diffuse：法线与光方向的点积（Lambert 漫反射）
-     * - ambient：环境光，防止暗面全黑
-     */
-    vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
-    float diffuse = max(dot(vNormal, lightDir), 0.0);
-    float ambient = 0.15;
-
-    /**
-     * 用噪声值映射颜色
-     *
-     * - 低噪声值（凹陷）→ 深蓝色（海洋）
-     * - 中噪声值（平原）→ 绿色（草地）
-     * - 高噪声值（凸起）→ 白色（雪山）
-     *
-     * smoothstep 实现平滑的颜色过渡
-     */
+    /** 基于噪声值做轻微的表面起伏反射扰动（模拟微观凹凸） */
+    vec3 nrm = normalize(vNormal);
     float n = vNoise * 0.5 + 0.5;
-    vec3 deepColor = vec3(0.1, 0.2, 0.6);
-    vec3 midColor = vec3(0.2, 0.6, 0.2);
-    vec3 highColor = vec3(0.95, 0.95, 1.0);
+    nrm = normalize(nrm + vec3(0.0, (n - 0.5) * 1.5, 0.0));
 
-    vec3 color;
-    if (n < 0.45) {
-      color = mix(deepColor, midColor, smoothstep(0.2, 0.45, n));
-    } else {
-      color = mix(midColor, highColor, smoothstep(0.45, 0.75, n));
-    }
+    /** 主方向光 + 弱补光 */
+    vec3 lightDir = normalize(vec3(0.6, 1.0, 0.4));
+    vec3 fillDir = normalize(vec3(-0.4, 0.2, 0.6));
 
-    /** 应用光照 */
-    color *= (ambient + diffuse);
+    /** Blinn-Phong 高光 */
+    vec3 viewDir = normalize(cameraPosition - vPosition);
+    vec3 halfDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(nrm, halfDir), 0.0), 64.0);
+
+    float diffuse = max(dot(nrm, lightDir), 0.0);
+    float fill = max(dot(nrm, fillDir), 0.0);
+
+    /** 金属格调：基础色 = 冷蓝金属 + 环境反光 + 方向光 + 高光 */
+    vec3 base = uBaseColor;
+    vec3 env = envSample(nrm);
+
+    /** 漫反射（仍保留，金属偏暗） */
+    float kd = 1.0 - uMetalness;
+    vec3 color = base * (vec3(0.15) + env * 0.25) * kd;
+
+    /** 环境镜面反射 + 方向光高光混合 */
+    color += env * 0.5 * uMetalness;
+    color += base * diffuse * 0.5;
+    color += base * fill * 0.15;
+    color += vec3(0.9, 0.95, 1.0) * spec * (1.0 - uRoughness);
+
+    /** 凹陷处轻微暗化（模拟 AO） */
+    color *= mix(0.82, 1.0, smoothstep(0.3, 0.6, n));
 
     gl_FragColor = vec4(color, 1.0);
   }
@@ -550,6 +588,10 @@ function createDeformPanel(): THREE.Mesh {
       uTime: { value: 0 },
       uNoiseScale: { value: 2.0 },
       uNoiseStrength: { value: 0.3 },
+      /** 冷色金属蓝（参考 demo.jpg 第 4 栏 #6b9dc7 ~ #a8d0f0） */
+      uBaseColor: { value: new THREE.Color(0x6b9dc7) },
+      uMetalness: { value: 1.0 },
+      uRoughness: { value: 0.2 },
     },
     side: THREE.DoubleSide,
   })
@@ -603,6 +645,27 @@ function init() {
   const controls = new OrbitControls(manager.camera, canvas)
   controls.enableDamping = true
   controls.dampingFactor = 0.05
+
+  /**
+   * 各面板的相机聚焦点（all 回到全景）
+   *
+   * 面板在 X 轴上并排（间距 4），相机 z = 14。
+   * 选中单个面板时相机平滑移动过去，让该面板居中显示。
+   */
+  const panelX: Record<string, number> = {
+    all: 0,
+    perlin: -6,
+    fbm: -2,
+    cloud: 2,
+    deform: 6,
+  }
+
+  /** 切换面板时平滑移动相机，让选中面板居中 */
+  const flyTo = (value: string) => {
+    const x = panelX[value] ?? 0
+    gsap.to(controls.target, { x, y: 0, z: 0, duration: 0.8, ease: 'power2.inOut' })
+    gsap.to(manager.camera.position, { x, y: 0, z: 14, duration: 0.8, ease: 'power2.inOut', onUpdate: () => controls.update() })
+  }
 
   /* ========== 灯光 ========== */
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0)
@@ -679,6 +742,8 @@ function init() {
         deformPanel.visible = value === 'deform'
       }
       updateSliderVisibility(value)
+      /** 相机平滑移动，让选中面板居中 */
+      flyTo(value)
     },
   })
 

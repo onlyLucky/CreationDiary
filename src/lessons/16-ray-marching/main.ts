@@ -231,6 +231,14 @@ const rayMarchFragmentShader = /* glsl */ `
   }
 `
 
+/**
+ * 顶点着色器 — 全屏三角形
+ *
+ * 这是全屏 shader 的经典写法：
+ * - 传入的 PlaneGeometry(2, 2) 顶点坐标恰好覆盖整个裁剪空间（[-1, 1]）
+ * - 直接输出 gl_Position = vec4(position, 1.0)，不做任何矩阵变换
+ * - 于是三角形铺满整个屏幕，片元着色器对每个像素执行一次
+ */
 const rayMarchVertexShader = /* glsl */ `
   void main() {
     gl_Position = vec4(position, 1.0);
@@ -271,6 +279,7 @@ function init() {
   /* ========== 控制面板 ========== */
   const panel = new ControlPanel('controls')
 
+  /** 场景参数：实时修改 shader uniform，Ray March 结果随之变化 */
   panel.addSlider({ id: 'sphere-radius', label: '球体半径', type: 'slider', min: 0.3, max: 2, step: 0.05, defaultValue: 1.0,
     onChange: (v: number) => { material.uniforms.uSphereRadius.value = v } })
   panel.addSlider({ id: 'box-size', label: '盒子大小', type: 'slider', min: 0.2, max: 1.5, step: 0.05, defaultValue: 0.6,
@@ -283,6 +292,7 @@ function init() {
 
   function animate() {
     requestAnimationFrame(animate)
+    /** 每帧更新时间 uniform（驱动球体浮动、盒子旋转等动画） */
     material.uniforms.uTime.value = clock.getElapsedTime()
     manager.renderer.render(manager.scene, manager.camera)
   }

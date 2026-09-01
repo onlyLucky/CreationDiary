@@ -34,6 +34,7 @@ import * as THREE from 'three'
 import { SceneManager } from '@/core/SceneManager'
 import { ControlPanel } from '@/core/ControlPanel'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import gsap from 'gsap'
 
 /* ========== 1. 形状函数 — 2D SDF 基础 ========== */
 
@@ -596,6 +597,27 @@ function init() {
   controls.enableDamping = true
   controls.dampingFactor = 0.05
 
+  /**
+   * 各面板的相机聚焦点（all 回到全景）
+   *
+   * 面板在 X 轴上并排（间距 4），相机 z = 12。
+   * 选中单个面板时相机平滑移动过去，让该面板居中显示。
+   */
+  const panelX: Record<string, number> = {
+    all: 0,
+    shapes: -6,
+    gradient: -2,
+    wave: 2,
+    pattern: 6,
+  }
+
+  /** 切换面板时平滑移动相机，让选中面板居中 */
+  const flyTo = (value: string) => {
+    const x = panelX[value] ?? 0
+    gsap.to(controls.target, { x, y: 0, z: 0, duration: 0.8, ease: 'power2.inOut' })
+    gsap.to(manager.camera.position, { x, y: 0, z: 12, duration: 0.8, ease: 'power2.inOut', onUpdate: () => controls.update() })
+  }
+
   /* ========== 灯光 ========== */
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0)
   manager.scene.add(ambientLight)
@@ -679,6 +701,8 @@ function init() {
       }
       /** 同步显示/隐藏对应的滑块控件 */
       updateSliderVisibility(value)
+      /** 相机平滑移动，让选中面板居中 */
+      flyTo(value)
     },
   })
 

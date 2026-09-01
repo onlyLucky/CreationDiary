@@ -34,10 +34,21 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 /* ========== 1. 普通 Mesh 渲染 ========== */
 
+/**
+ * 创建普通 Mesh — 性能对比的「反面教材」
+ *
+ * 每个球体一个 Mesh，共享同一几何体但各自独立的材质实例：
+ * - 每个 Mesh 都是一次独立的 Draw Call（CPU 状态切换开销大）
+ * - 数量达到数千时，渲染明显变慢
+ *
+ * @param count - 球体数量
+ * @param scene - 目标场景
+ */
 function createNormalMeshes(count: number, scene: THREE.Scene): THREE.Mesh[] {
   const geo = new THREE.SphereGeometry(0.15, 16, 16)
   const meshes: THREE.Mesh[] = []
 
+  /** 每个球体一个独立材质（按索引映射色相），随机分布在 10×10×10 空间 */
   for (let i = 0; i < count; i++) {
     const mat = new THREE.MeshStandardMaterial({
       color: new THREE.Color().setHSL(i / count, 0.8, 0.5),
@@ -58,14 +69,26 @@ function createNormalMeshes(count: number, scene: THREE.Scene): THREE.Mesh[] {
 
 /* ========== 2. InstancedMesh 渲染 ========== */
 
+/**
+ * 创建 InstancedMesh — 性能对比的「推荐方案」
+ *
+ * 只创建一个网格对象，用一份 geometry + 一份材质渲染 count 个实例：
+ * - 所有实例合并为一次 Draw Call，性能远优于普通 Mesh
+ * - 每个实例的变换矩阵和颜色分别通过 setMatrixAt / setColorAt 设置
+ *
+ * @param count - 实例数量
+ * @param scene - 目标场景
+ */
 function createInstancedMeshes(count: number, scene: THREE.Scene): THREE.InstancedMesh {
   const geo = new THREE.SphereGeometry(0.15, 16, 16)
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.5 })
   const instancedMesh = new THREE.InstancedMesh(geo, mat, count)
 
+  /** dummy 是临时的 Object3D，用于计算每个实例的位置矩阵 */
   const dummy = new THREE.Object3D()
   const color = new THREE.Color()
 
+  /** 为每个实例写入位置矩阵和颜色 */
   for (let i = 0; i < count; i++) {
     dummy.position.set(
       (Math.random() - 0.5) * 10,
@@ -83,8 +106,20 @@ function createInstancedMeshes(count: number, scene: THREE.Scene): THREE.Instanc
 
 /* ========== 3. 性能监控 ========== */
 
+/**
+ * 性能监控器
+ *
+ * 在页面左上角显示实时性能数据：
+ * - FPS：每秒帧数（统计 1 秒内的帧数）
+ * - Draw Calls / Triangles：来自 renderer.info.render
+ * - Geometries / Textures：来自 renderer.info.memory
+ *
+ * 用 renderer.info 可以直观对比「普通 Mesh」与「InstancedMesh」的 Draw Call 差异
+ */
 class PerformanceMonitor {
+  /** 用于显示的 DOM 元素 */
   private element: HTMLDivElement
+  /** 上一秒累计的帧数 / 上次结算时间 / 计算出的 FPS */
   private frames = 0
   private lastTime = performance.now()
   private fps = 0
@@ -95,15 +130,18 @@ class PerformanceMonitor {
     document.body.appendChild(this.element)
   }
 
+  /** 每帧调用：累计帧数，每秒结算一次并刷新显示 */
   update(renderer: THREE.WebGLRenderer) {
     this.frames++
     const now = performance.now()
+    /** 距上次结算满 1 秒时，更新 FPS 并清零计数 */
     if (now - this.lastTime >= 1000) {
       this.fps = this.frames
       this.frames = 0
       this.lastTime = now
     }
 
+    /** 从 renderer.info 读取渲染统计信息并刷新到 DOM */
     const info = renderer.info
     this.element.innerHTML = [
       `FPS: ${this.fps}`,
@@ -117,6 +155,19 @@ class PerformanceMonitor {
 
 /* ========== 初始化场景 ========== */
 
+/**
+ * 初始化场景
+ *
+ * 场景结构：
+ * scene (根节点)
+ * ├── ambientLight / directionalLight (灯光)
+ * ├── normalMeshes    (普通 Mesh × count，默认隐藏)
+ * └── instancedMesh   (InstancedMesh × count，默认显示)
+ *
+ * 演示方式：
+ * - 同一份球体几何体、同样的数量，分别用两种方式渲染
+ * - 用控制面板切换渲染模式，观察左上角性能监控的 Draw Calls 差异
+ */
 function init() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
   const manager = new SceneManager({ canvas, bgColor: '#111111', fov: 60 })
@@ -132,12 +183,12 @@ function init() {
   dirLight.position.set(10, 10, 10)
   manager.scene.add(dirLight)
 
-  /** 创建物体 */
+  /** 用同样的数量创建两种渲染方式，方便对比性能 */
   const count = 1000
   const normalMeshes = createNormalMeshes(count, manager.scene)
   const instancedMesh = createInstancedMeshes(count, manager.scene)
 
-  /** 默认显示 InstancedMesh */
+  /** 默认显示 InstancedMesh（性能更好），隐藏普通 Mesh */
   normalMeshes.forEach((m) => { m.visible = false })
 
   const monitor = new PerformanceMonitor()
@@ -162,7 +213,7 @@ function init() {
   panel.addSlider({ id: 'instance-count', label: '实例数量', type: 'slider', min: 100, max: 50000, step: 100, defaultValue: count,
     onChange: (v: number) => {
       instanceCount = Math.round(v)
-      /** 重新创建 InstancedMesh（数量变化需要重建） */
+      /** 实例数量变化后需要重建 InstancedMesh：先移除并 dispose 旧对象，再创建新的 */
       manager.scene.remove(instancedMesh)
       instancedMesh.dispose()
       const newInstanced = createInstancedMeshes(instanceCount, manager.scene)

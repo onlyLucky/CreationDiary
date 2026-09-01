@@ -7,7 +7,7 @@
 
 type Mode = 'lessons' | 'homework'
 
-const MODE = 'lessons' as Mode
+const MODE = 'homework' as Mode
 
 // 根据模式显示/隐藏对应的 canvas 容器
 const lessonsCanvas = document.getElementById('canvas')
@@ -22,7 +22,7 @@ if (homeworkContainer) {
 
 // 根据模式动态导入对应的模块
 if (MODE === 'lessons') {
-  import('./lessons/11-glsl-math/main')
+  import('./lessons/12-noise/main')
 } else {
-  import('./homework/11-glsl-math/main')
+  import('./homework/12-noise/main')
 }
