@@ -10,6 +10,7 @@
 - 理解分段数与顶点数的关系
 - 学会程序生成纹理（Canvas）
 - 理解 Wireframe 的实现原理
+- 了解 TextGeometry 生成 3D 文字（FontLoader 异步加载字体）
 
 ---
 
@@ -103,6 +104,53 @@ function createCheckerTexture(size = 256, squares = 8): THREE.CanvasTexture {
 
 ---
 
+## TextGeometry（3D 文字）
+
+TextGeometry 不是 `THREE` 命名空间的内置几何体，要从 addons 引入，且依赖**异步加载**的字体文件：
+
+```typescript
+import { FontLoader } from 'three/addons/loaders/FontLoader.js'
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js'
+
+const fontLoader = new FontLoader()
+fontLoader.load('/fonts/helvetiker_regular.typeface.json', (font) => {
+  const textGeometry = new TextGeometry('Three.js', {
+    font,               // 字体对象（来自 FontLoader 回调参数）
+    size: 1,            // 字号（世界坐标单位）
+    depth: 0.4,         // 挤出厚度（旧版叫 height，r163 起改名 depth）
+    curveSegments: 8,   // 曲线分段数
+    bevelEnabled: true, // 倒角：边缘斜切，立体感和高光更好
+    bevelThickness: 0.04, // 倒角厚度（挤出方向）
+    bevelSize: 0.02,      // 倒角宽度（轮廓向外扩多少）
+    bevelSegments: 2,     // 倒角分段数
+  })
+  const mesh = new THREE.Mesh(textGeometry, new THREE.MeshStandardMaterial())
+  scene.add(mesh)
+})
+```
+
+### 要点
+
+- **异步时序**：`fontLoader.load()` 是异步的。加载完成前场景照常渲染，在回调里再 `add` 文字；不要在同步初始化流程里阻塞等待字体。
+- **原点在文字左下角**：`TextGeometry` 以文字起点为原点生成，居中要手动算宽度平移：
+
+```typescript
+textGeometry.computeBoundingBox()
+const b = textGeometry.boundingBox!
+textGeometry.translate(-(b.max.x - b.min.x) / 2, 0, 0)
+```
+
+- **depth 而不是 height**：r163 之前挤出厚度参数叫 `height`，r163 起改名 `depth`（和 BoxGeometry 的第三轴命名统一）。旧教程的 `height: 0.4` 在新版本会被静默忽略——文字变成没有厚度的平面薄片。
+- **curveSegments 与性能**：曲线分段数控制笔画圆弧的圆滑度，类比球体的 segments——越大越圆滑，顶点数也随之上涨；`bevelSegments` 同理。笔画多的文字 + 高倒角分段时顶点数增长很快。
+
+### 字体文件
+
+- 字体是 typeface.json 格式（由 TTF 转换，可用 facetype.js 之类的在线工具从自己的字体生成，适合展示中文）
+- 本项目放在 `public/fonts/helvetiker_regular.typeface.json`，运行时按 `/fonts/...` 路径加载
+- **three r185 起 npm 包不再附带 `examples/fonts/`**（r184 及以前还有），字体文件需要自行下载放进 public 目录
+
+---
+
 ## API 速查
 
 | API | 用途 |
@@ -116,3 +164,6 @@ function createCheckerTexture(size = 256, squares = 8): THREE.CanvasTexture {
 | `group.add(mesh)` | 把物体加入组 |
 | `new THREE.MeshBasicMaterial({ wireframe: true })` | 线框材质 |
 | `new THREE.CanvasTexture(canvas)` | 从 canvas 创建纹理 |
+| `new FontLoader().load(url, onLoad)` | 异步加载 typeface.json 字体 |
+| `new TextGeometry(text, { font, size, depth, curveSegments })` | 创建 3D 文字（r163+ 用 depth） |
+| `geometry.computeBoundingBox()` | 计算包围盒（文字居中前先算宽度） |

@@ -2,7 +2,7 @@
  * 第 4 课：灯光与阴影
  *
  * 学习目标：
- * 1. 掌握 5 种灯光类型及适用场景
+ * 1. 掌握 6 种灯光类型及适用场景
  * 2. 理解阴影的三要素（光源、投射物、接收面）
  * 3. 学会调整阴影质量和性能的平衡
  */
@@ -12,6 +12,8 @@ import { SceneManager } from '@/core/SceneManager'
 import { ControlPanel } from '@/core/ControlPanel'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { RectAreaLightHelper } from 'three/addons/helpers/RectAreaLightHelper.js'
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
 
 /**
  * 初始化场景
@@ -19,7 +21,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
  * 整体结构：
  * 1. 创建渲染器、相机、控制器
  * 2. 配置阴影系统
- * 3. 创建 5 种灯光并添加 Helper
+ * 3. 创建 6 种灯光并添加 Helper
  * 4. 创建几何体和地面
  * 5. 加载外部模型（GLTF）
  * 6. 动画循环
@@ -52,7 +54,7 @@ function init() {
   /**
    * 阴影配置
    *
-   * 开启阴影需要三步：
+   * 开启阴影需要四步：
    * 1. renderer.shadowMap.enabled = true — 渲染器开启阴影
    * 2. light.castShadow = true — 灯光投射阴影
    * 3. mesh.castShadow = true — 物体投射阴影
@@ -73,7 +75,7 @@ function init() {
    */
   manager.renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
-  // ========== 1. 五种灯光对比 ==========
+  // ========== 1. 六种灯光对比 ==========
 
   // 辅助环境光：单独使用灯光时，确保场景不会全黑
   const helperAmbientLight = new THREE.AmbientLight(0xffffff, 0.1)
@@ -146,8 +148,8 @@ function init() {
   directionalLight.shadow.camera.bottom = -10
   manager.scene.add(directionalLight)
 
-  const shadowCameraHelper = new THREE.CameraHelper(directionalLight.shadow.camera)
-  // manager.scene.add(shadowCameraHelper)
+  // 调试阴影相机范围时，临时打开下面这行，即可看到 shadow.camera 的视锥体：
+  // manager.scene.add(new THREE.CameraHelper(directionalLight.shadow.camera))
 
   /**
    * 1d. PointLight — 点光源
@@ -185,6 +187,45 @@ function init() {
   spotLight.castShadow = true
   manager.scene.add(spotLight)
 
+  /**
+   * 1f. RectAreaLight — 矩形面光源
+   *
+   * 从一个矩形平面均匀发光，像橱窗灯、灯箱、广告牌、屏幕补光。
+   * 「一整面墙都是光源」的效果只有它能实现。
+   *
+   * RectAreaLight(color, intensity, width, height)
+   *   color     — 灯光颜色，默认 0xffffff
+   *   intensity — 灯光强度，默认 1（物理光照单位下通常要给较大值）
+   *   width     — 矩形宽度，默认 10
+   *   height    — 矩形高度，默认 10
+   *
+   * 两个重要特性：
+   * 1. 必须先调用 RectAreaLightUniformsLib.init()，否则光照结果不正确
+   *    （内部预计算矩形面的 LTC 纹理，供 PBR 材质采样）
+   * 2. 不支持投影（设置 castShadow 无效）——这是它与 SpotLight 的关键区别
+   *
+   * 发光方向：沿自身 -Z 方向照射，用 lookAt() 控制照射目标
+   */
+  RectAreaLightUniformsLib.init()
+
+  const rectAreaLight = new THREE.RectAreaLight(0x00ffff, 5, 4, 3)
+  rectAreaLight.position.set(5, 3, 5)
+  rectAreaLight.lookAt(0, 1, 0) // 照向场景中心的几何体
+  manager.scene.add(rectAreaLight)
+
+  // 发光平面板：贴在面光源位置，直观展示「一面墙都是光源」
+  const lightPanelGeo = new THREE.PlaneGeometry(4, 3)
+  const lightPanelMat = new THREE.MeshBasicMaterial({
+    color: 0x00ffff,
+    side: THREE.DoubleSide,
+  })
+  const lightPanel = new THREE.Mesh(lightPanelGeo, lightPanelMat)
+  lightPanel.position.copy(rectAreaLight.position)
+  lightPanel.quaternion.copy(rectAreaLight.quaternion) // 与灯光同朝向
+  manager.scene.add(lightPanel)
+  manager.registerDisposable(lightPanelGeo)
+  manager.registerDisposable(lightPanelMat)
+
   // 灯光对象映射
   const lights: Record<string, THREE.Light> = {
     ambient: ambientLight,
@@ -192,6 +233,7 @@ function init() {
     directional: directionalLight,
     point: pointLight,
     spot: spotLight,
+    rectArea: rectAreaLight,
   }
 
   // 灯光 Helper 映射
@@ -235,6 +277,19 @@ function init() {
   helpers.point = pointHelper
   manager.scene.add(pointHelper)
 
+  /**
+   * RectAreaLightHelper — 矩形面光源辅助可视化
+   *
+   * 用线框矩形显示面光源的位置、大小和朝向
+   *
+   * RectAreaLightHelper(light, color)
+   *   light — 要可视化的面光源
+   *   color — 线框颜色，默认取灯光颜色
+   */
+  const rectAreaHelper = new RectAreaLightHelper(rectAreaLight)
+  helpers.rectArea = rectAreaHelper
+  manager.scene.add(rectAreaHelper)
+
   // 灯光标签映射
   const lightLabels: Record<string, THREE.Sprite> = {}
 
@@ -267,6 +322,7 @@ function init() {
     directional: new THREE.Vector3(-1, 5, 0),
     point: new THREE.Vector3(1, 5, 0),
     spot: new THREE.Vector3(3, 5, 0),
+    rectArea: new THREE.Vector3(5, 5, 0),
   }
 
   Object.entries(labelPositions).forEach(([key, pos]) => {
@@ -335,6 +391,7 @@ function init() {
       { value: 'directional', label: '方向光 (Directional)' },
       { value: 'point', label: '点光源 (Point)' },
       { value: 'spot', label: '聚光灯 (Spot)' },
+      { value: 'rectArea', label: '面光源 (RectArea)' },
     ],
     defaultValue: 'all',
     onChange: (value) => {
@@ -596,7 +653,7 @@ function init() {
   // 控制台提示
   console.log('=== 第 4 课：灯光与阴影 ===')
   console.log('观察要点：')
-  console.log('  - 5 种灯光：Ambient/Hemisphere/Directional/Point/Spot')
+  console.log('  - 6 种灯光：Ambient/Hemisphere/Directional/Point/Spot/RectArea')
   console.log('  - 阴影三要素：光源.castShadow + 物体.castShadow + 地面.receiveShadow')
   console.log('  - 灯光 Helper：可视化灯光范围和方向')
   console.log('')
@@ -604,6 +661,7 @@ function init() {
   console.log('  - 调整 directionalLight.intensity，观察亮度变化')
   console.log('  - 调整 shadow.mapSize，观察阴影质量变化')
   console.log('  - 调整 spotLight.angle，观察聚光灯范围变化')
+  console.log('  - 调整 rectAreaLight 的 intensity/width/height，观察面光源范围变化')
   console.log('  - 关闭 renderer.shadowMap.enabled，观察阴影消失')
 }
 

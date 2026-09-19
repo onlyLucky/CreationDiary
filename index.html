@@ -5,6 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Three.js Creative 3D - 学习项目</title>
     <link rel="stylesheet" href="/src/style.css" />
+    <style>
+      /* 课程门户：仅用于无 hash 时的选课界面，选中课程后由 main.ts 隐藏 */
+      :root {
+        --p-bg: #0e1218;
+        --p-frame: #1c2330;
+        --p-line: #161d28;
+        --p-ink: #8792a3;
+        --p-ink-dim: #4c5566;
+        --p-ink-hi: #c6cfdb;
+        --p-accent: #5e93d3;
+        --p-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+      }
+      #portal {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        overflow-y: auto;
+        background: var(--p-bg);
+        color: var(--p-ink);
+        font-family: var(--p-mono);
+        padding: 3rem 4rem 6rem;
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      #portal a { -webkit-tap-highlight-color: transparent; }
+      #portal header { margin-bottom: 4rem; }
+      #portal header .kicker {
+        font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+        color: var(--p-ink-dim); margin-bottom: 14px;
+      }
+      #portal header h1 {
+        font-size: 22px; font-weight: normal; color: var(--p-ink-hi);
+        letter-spacing: 0.04em;
+      }
+      #portal header h1 b { font-weight: normal; color: var(--p-accent); }
+      #portal header p { margin-top: 12px; font-size: 12.5px; line-height: 1.8; max-width: 62ch; }
+
+      #portal .week { margin-bottom: 3.5rem; }
+      #portal .week-head {
+        display: flex; align-items: baseline; gap: 14px;
+        border-bottom: 1px solid var(--p-frame);
+        padding-bottom: 10px; margin-bottom: 6px;
+      }
+      #portal .week-head .no { font-size: 11px; color: var(--p-accent); letter-spacing: 0.12em; }
+      #portal .week-head h2 { font-size: 15px; font-weight: normal; color: var(--p-ink-hi); letter-spacing: 0.05em; }
+      #portal .week-head .count { margin-left: auto; font-size: 11px; color: var(--p-ink-dim); }
+
+      #portal .row {
+        display: grid;
+        grid-template-columns: 3.5rem 12rem 1fr auto;
+        gap: 1rem;
+        align-items: baseline;
+        padding: 11px 6px;
+        border-bottom: 1px solid var(--p-line);
+        text-decoration: none;
+        color: var(--p-ink);
+        transition: background 0.15s ease, padding-left 0.15s ease;
+      }
+      #portal .row:hover { background: #131924; padding-left: 12px; }
+      #portal .row .idx { font-size: 11px; color: var(--p-ink-dim); }
+      #portal .row .name { font-size: 13px; color: var(--p-ink-hi); }
+      #portal .row .desc { font-size: 11.5px; color: var(--p-ink-dim); }
+      #portal .row .tag {
+        font-size: 10px; letter-spacing: 0.08em; color: var(--p-ink-dim);
+        border: 1px solid var(--p-frame); border-radius: 3px; padding: 2px 7px;
+        white-space: nowrap;
+      }
+      #portal .row .tag.done { color: #55a99a; border-color: #1e3a36; }
+      #portal .row .tag.fixing { color: #c2914a; border-color: #3d3320; }
+      #portal .row .tag.hw { color: #8d7ab8; border-color: #2f2a44; }
+
+      #portal .week-hw { margin-top: 10px; }
+      #portal .week-hw .label {
+        font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+        color: var(--p-ink-dim); margin: 14px 0 4px;
+      }
+      #portal .note {
+        margin-top: 5rem; padding-top: 1.4rem; border-top: 1px solid var(--p-frame);
+        font-size: 11.5px; line-height: 2; color: var(--p-ink-dim);
+      }
+    </style>
   </head>
   <body>
     <div id="app">
@@ -18,6 +99,248 @@
       </div>
       <div id="controls"></div>
     </div>
+
+    <div id="portal">
+      <header>
+        <div class="kicker">FRONTEND / 3D / 20 LESSONS</div>
+        <h1>Three.js 创意 3D <b>·</b> 20 课学习项目</h1>
+        <p>
+          每课对应一个可运行目录：地址栏 #lesson-N 进课程、#homework-N 进作业，
+          或直接点击下面的条目。1-12 课已完成；13-20 课的代码与笔记已就绪，尚未正式学习。
+        </p>
+      </header>
+
+      <section class="week">
+        <div class="week-head">
+          <span class="no">WEEK 1</span>
+          <h2>Three.js 基础</h2>
+          <span class="count">L1 → L2 · 课 1-5</span>
+        </div>
+        <a class="row" href="#lesson-1">
+          <span class="idx">01</span><span class="name">项目架构</span>
+          <span class="desc">从零搭建 Vite + TypeScript + Three.js 项目，理解三件套与动画循环</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-2">
+          <span class="idx">02</span><span class="name">几何体与图元</span>
+          <span class="desc">掌握内置几何体与分段数，用图元组合复杂物体</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-3">
+          <span class="idx">03</span><span class="name">材质系统</span>
+          <span class="desc">区分六种材质类型，理解 PBR 参数与环境贴图反射</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-4">
+          <span class="idx">04</span><span class="name">灯光与阴影</span>
+          <span class="desc">掌握六种灯光类型与阴影三要素，平衡质量与性能</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-5">
+          <span class="idx">05</span><span class="name">相机与控制</span>
+          <span class="desc">区分透视与正交相机，掌握 OrbitControls 与相机参数</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <div class="week-hw">
+          <div class="label">Homework — 课后练习</div>
+          <a class="row" href="#homework-5">
+            <span class="idx">05</span><span class="name">相机路径过山车</span>
+            <span class="desc">GSAP 相机路径动画，第一/第三人称双机位</span>
+            <span class="tag hw">作业</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="week">
+        <div class="week-head">
+          <span class="no">WEEK 2</span>
+          <h2>核心技能</h2>
+          <span class="count">L2 进阶 · 课 6-10</span>
+        </div>
+        <a class="row" href="#lesson-6">
+          <span class="idx">06</span><span class="name">纹理与贴图</span>
+          <span class="desc">掌握 TextureLoader 与 UV 映射，控制 repeat/offset/wrap</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-7">
+          <span class="idx">07</span><span class="name">场景图与变换</span>
+          <span class="desc">理解场景图树形结构与父子变换继承</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-8">
+          <span class="idx">08</span><span class="name">模型加载</span>
+          <span class="desc">掌握 GLTF/GLB 加载、Draco 压缩与 Loading 进度条</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-9">
+          <span class="idx">09</span><span class="name">动画系统</span>
+          <span class="desc">理解 rAF 循环与 GSAP 的区别，用 timeline 驱动平滑动画</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <a class="row" href="#lesson-10">
+          <span class="idx">10</span><span class="name">GLSL 基础</span>
+          <span class="desc">理解 Vertex/Fragment Shader 结构，区分 uniform/varying/attribute</span>
+          <span class="tag done">已完成</span>
+        </a>
+        <div class="week-hw">
+          <div class="label">Homework — 课后练习</div>
+          <a class="row" href="#homework-6">
+            <span class="idx">06</span><span class="name">奢侈品手表展示</span>
+            <span class="desc">环境贴图反射 + PBR 材质 + 三点照明</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-7">
+            <span class="idx">07</span><span class="name">积木小动物拼装</span>
+            <span class="desc">父子关系与变换继承：图元拼装对照 OBJ 模型</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-8">
+            <span class="idx">08</span><span class="name">房间场景加载</span>
+            <span class="desc">My Room in 3D：GLTF 房间加载与烘焙着色</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-9">
+            <span class="idx">09</span><span class="name">GSAP 位移动画</span>
+            <span class="desc">用 GSAP 把物体从 A 点平滑移到 B 点</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-10">
+            <span class="idx">10</span><span class="name">渐变色 Shader</span>
+            <span class="desc">写一个渐变色 shader，颜色随时间流动</span>
+            <span class="tag hw">作业</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="week">
+        <div class="week-head">
+          <span class="no">WEEK 3</span>
+          <h2>GLSL 进阶</h2>
+          <span class="count">L3 → L4 · 课 11-15</span>
+        </div>
+        <a class="row" href="#lesson-11">
+          <span class="idx">11</span><span class="name">GLSL 数学函数</span>
+          <span class="desc">掌握内置数学函数与向量运算，用函数画出基本形状</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-12">
+          <span class="idx">12</span><span class="name">噪声函数</span>
+          <span class="desc">理解 Value/Perlin/Simplex 三种噪声，掌握 FBM 与有机效果</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-13">
+          <span class="idx">13</span><span class="name">高级 Shader 效果</span>
+          <span class="desc">掌握 Dissolve 消融与 Hologram 全息，深入 Fresnel 效应</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-14">
+          <span class="idx">14</span><span class="name">后处理效果</span>
+          <span class="desc">掌握 EffectComposer Pass 链与 UnrealBloomPass 泛光</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-15">
+          <span class="idx">15</span><span class="name">粒子系统</span>
+          <span class="desc">掌握 BufferGeometry 粒子，用自定义 ShaderMaterial 控制粒子</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <div class="week-hw">
+          <div class="label">Homework — 课后练习</div>
+          <a class="row" href="#homework-11">
+            <span class="idx">11</span><span class="name">数学函数绘画</span>
+            <span class="desc">用 mix/fract/atan 画径向渐变、网格与太阳光芒</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-12">
+            <span class="idx">12</span><span class="name">噪声问题修复</span>
+            <span class="desc">风吹草地、FBM 云、噪声地形三大经典问题修复</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-13">
+            <span class="idx">13</span><span class="name">消融过渡</span>
+            <span class="desc">复刻一个消融过渡（Dissolve）效果</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-14">
+            <span class="idx">14</span><span class="name">后处理链</span>
+            <span class="desc">Bloom + 色彩校正 + Vignette 组合</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-15">
+            <span class="idx">15</span><span class="name">粒子流动</span>
+            <span class="desc">做一个十万粒子的流动效果</span>
+            <span class="tag hw">作业</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="week">
+        <div class="week-head">
+          <span class="no">WEEK 4</span>
+          <h2>创意特效实战</h2>
+          <span class="count">L4 · 课 16-20</span>
+        </div>
+        <a class="row" href="#lesson-16">
+          <span class="idx">16</span><span class="name">Ray Marching 与 SDF</span>
+          <span class="desc">理解 SDF 概念与 Ray Marching 原理，学会基本形状 SDF</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-17">
+          <span class="idx">17</span><span class="name">滚动驱动动画</span>
+          <span class="desc">用 GSAP ScrollTrigger 把滚动进度映射为动画进度</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-18">
+          <span class="idx">18</span><span class="name">创意交互</span>
+          <span class="desc">用 Raycaster 实现鼠标跟随、悬停高亮与涟漪扩散</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-19">
+          <span class="idx">19</span><span class="name">网站架构设计</span>
+          <span class="desc">理解多场景管理架构，掌握切换过渡与 Loading 策略</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <a class="row" href="#lesson-20">
+          <span class="idx">20</span><span class="name">性能调优与部署</span>
+          <span class="desc">理解 Draw Call 优化与 InstancedMesh 批量渲染</span>
+          <span class="tag fixing">修复中</span>
+        </a>
+        <div class="week-hw">
+          <div class="label">Homework — 课后练习</div>
+          <a class="row" href="#homework-16">
+            <span class="idx">16</span><span class="name">Metaball 融球</span>
+            <span class="desc">用纯 shader 画 metaball 融球效果</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-17">
+            <span class="idx">17</span><span class="name">滚动场景切换</span>
+            <span class="desc">滚动驱动的 3D 场景切换 demo</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-18">
+            <span class="idx">18</span><span class="name">鼠标涟漪</span>
+            <span class="desc">鼠标跟随的 3D 涟漪效果</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-19">
+            <span class="idx">19</span><span class="name">网站架构</span>
+            <span class="desc">场景切换 + Loading 页的架构设计</span>
+            <span class="tag hw">作业</span>
+          </a>
+          <a class="row" href="#homework-20">
+            <span class="idx">20</span><span class="name">优化与部署</span>
+            <span class="desc">把作品优化到 60fps 并部署上线</span>
+            <span class="tag hw">作业</span>
+          </a>
+        </div>
+      </section>
+
+      <footer class="note">
+        标签说明：已完成 = 已上完并有课后笔记；修复中 = 代码与笔记已就绪、尚未正式学习；
+        作业 = 课后练习入口（要求见各目录 main.ts 头部注释）。
+        无 hash 打开本页即为门户；进入课程后地址栏保留 #lesson-N / #homework-N，可直接分享定位。
+      </footer>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

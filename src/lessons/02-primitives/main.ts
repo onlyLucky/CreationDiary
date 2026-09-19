@@ -6,9 +6,12 @@
  * 2. 理解参数对效果和性能的影响（segments 分段数）
  * 3. 学会用多个图元组合成复杂物体
  * 4. 理解 Wireframe 可视化
+ * 5. 了解 TextGeometry 生成 3D 文字（FontLoader 异步加载字体）
  */
 
 import * as THREE from 'three'
+import { FontLoader } from 'three/addons/loaders/FontLoader.js'
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js'
 import { SceneManager } from '@/core/SceneManager'
 
 /** 创建棋盘格纹理（程序生成） */
@@ -170,6 +173,49 @@ function init() {
   manager.registerDisposable(wireGeometry)
   manager.registerDisposable(wireMaterial)
 
+  // ========== 7. TextGeometry（3D 文字）==========
+  // 字体加载是异步的：加载期间场景照常渲染，完成后才把文字加进场景
+  const fontLoader = new FontLoader()
+  fontLoader.load(
+    '/fonts/helvetiker_regular.typeface.json', // 字体文件（public/fonts/ 下）
+    (font) => {
+      const textGeometry = new TextGeometry('Three.js', {
+        font,               // FontLoader 加载好的字体对象
+        size: 1,            // 文字大小（字号，单位与世界坐标一致）
+        depth: 0.4,         // 挤出厚度（旧版参数叫 height，r163 起改名 depth）
+        curveSegments: 8,   // 曲线分段数：越大笔画越圆滑，顶点也越多（类比球体的 segments）
+        bevelEnabled: true, // 倒角：边缘斜切一圈，立体感和高光都更好
+        bevelThickness: 0.04, // 倒角厚度（挤出方向）
+        bevelSize: 0.02,      // 倒角宽度（文字轮廓向外扩多少）
+        bevelSegments: 2,     // 倒角分段数
+      })
+      // TextGeometry 默认以文字起点（左下角）为原点，先算宽度再平移，让文字水平居中
+      textGeometry.computeBoundingBox()
+      const textBox = textGeometry.boundingBox!
+      textGeometry.translate(-(textBox.max.x - textBox.min.x) / 2, 0, 0)
+
+      const textMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffd43b, // 黄色
+        roughness: 0.35, // 较光滑
+        metalness: 0.6,  // 金属感
+      })
+      const text = new THREE.Mesh(textGeometry, textMaterial)
+      text.position.set(0, 2.5, 0) // 顶部中央，悬在其他物体上方
+      manager.scene.add(text)
+      manager.registerDisposable(textGeometry)
+      manager.registerDisposable(textMaterial)
+
+      // 字体加载完成后补注册旋转动画（onUpdate 支持多次注册）
+      manager.onUpdate((delta) => {
+        text.rotation.y += 0.3 * delta
+      })
+    },
+    undefined, // onProgress：这里用不上
+    (err) => {
+      console.error('字体加载失败：', err)
+    }
+  )
+
   // ========== 动画循环 ==========
   manager.onUpdate((delta) => {
     // delta = 两帧间隔时间（秒）
@@ -191,14 +237,16 @@ function init() {
   // 控制台提示
   console.log('=== 第 2 课：几何体与图元 ===')
   console.log('观察要点：')
-  console.log('  - 5 种几何体：Box, Sphere, Cylinder, Torus, Plane')
+  console.log('  - 6 种几何体：Box, Sphere, Cylinder, Torus, Plane, Text（3D 文字）')
   console.log('  - Wireframe 球体：低分段数，明显看到多边形')
   console.log('  - 棋盘格纹理：展示 UV 映射效果')
+  console.log('  - 3D 文字：FontLoader 异步加载字体，TextGeometry 挤出成型')
   console.log('')
   console.log('尝试修改：')
   console.log('  - 调整 SphereGeometry 的 segments 参数（如 8, 16, 32, 64）')
   console.log('  - 观察分段数对球体圆滑度的影响')
   console.log('  - 修改 BoxGeometry 的分段数，观察 wireframe 变化')
+  console.log('  - 调整 TextGeometry 的 curveSegments（如 2, 8, 16），对比文字边缘与顶点数')
 }
 
 init()

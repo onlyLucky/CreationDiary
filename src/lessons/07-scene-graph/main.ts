@@ -301,9 +301,8 @@ function init() {
   })
 
   // ========== 6. 动画循环 ==========
-  // THREE.Clock：时钟对象，用于计算时间差
-  // getDelta() 返回上一帧到当前帧的时间差（秒）
-  const clock = new THREE.Clock()
+  // 回调参数 delta 是上一帧到当前帧的时间差（秒），由 SceneManager 内部每帧计算后传入，
+  // 用它驱动动画即可实现帧率无关（60fps 和 30fps 下每秒转过的角度相同）
 
   // onUpdate：每帧更新回调
   // delta：时间差，用于实现帧率无关的动画

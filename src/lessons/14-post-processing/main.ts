@@ -6,17 +6,19 @@
  * 2. 掌握 RenderPass / ShaderPass / UnrealBloomPass
  * 3. 学会配置 Bloom（辉光）效果的参数调优
  * 4. 理解自定义后处理 Pass 的编写方法
+ * 5. 理解色调映射（Tone Mapping）：把 HDR 高光压回显示器能表达的范围
  *
  * 本节概览（一个 3D 场景 + 后处理链）：
  * - 场景：多个发光球体 + 网格地面
- * - 后处理：Bloom 辉光 + 色彩校正 + Vignette 暗角
- * - 控制面板：可调 Bloom 阈值/强度/半径、Vignette 强度
+ * - 后处理：Bloom 辉光 + 色彩校正 + Vignette 暗角 + 色调映射
+ * - 控制面板：可调 Bloom 阈值/强度/半径、Vignette 强度、色调映射模式与曝光
  *
  * 核心思路：
  * - EffectComposer 把渲染结果像"滤镜链"一样逐个处理
  * - RenderPass：渲染 3D 场景到帧缓冲
  * - UnrealBloomPass：提取高亮区域做高斯模糊叠加
  * - ShaderPass：自定义片元着色器做色彩校正/Vignette
+ * - OutputPass：链末尾执行色调映射 + sRGB 色彩空间转换（缺失会让画面偏暗）
  *
  * 参考案例：
  * - Three.js Examples — webgl_postprocessing_unreal_bloom
@@ -35,6 +37,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 
 /* ========== 1. Vignette Shader ========== */
 
@@ -137,13 +140,31 @@ const ColorCorrectionShader = {
  * └── directionalLight   (方向光)
  *
  * 渲染管线（后处理链，按顺序执行）：
- * RenderPass（场景） → UnrealBloomPass（辉光） → ShaderPass（色彩校正） → ShaderPass（暗角）
+ * RenderPass（场景） → UnrealBloomPass（辉光） → ShaderPass（色彩校正） → ShaderPass（暗角） → OutputPass（色调映射 + sRGB）
  * - 每个 Pass 把上一 Pass 的输出作为输入，类似「滤镜链」
  * - 最终显示的是后处理链的输出，而不是直接渲染场景
  */
 function init() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
   const manager = new SceneManager({ canvas, bgColor: '#000000', fov: 60 })
+
+  /**
+   * 色调映射（Tone Mapping）
+   *
+   * 为什么需要：Bloom 的亮部正是 HDR 的来源——emissiveIntensity = 2.0 的
+   * 高发光材质叠加辉光后，像素值会远超 1.0（高动态范围）。
+   * 显示器是 SDR 设备，超出 [0, 1] 的部分被直接裁剪成死白，高光层次全丢。
+   * 色调映射把 HDR 高值平滑压缩回 [0, 1]：ACES 是电影业常用的那条压缩曲线，
+   * Linear 则是线性缩放（exposure 乘完就 clamp），作为「无压缩」的对照组。
+   *
+   * 两个坑：
+   * 1. 顺序：three 中 tone mapping 发生在输出色彩空间转换（linear → sRGB）之前
+   * 2. EffectComposer：中间 Pass 渲染到 render target 时不执行 tone mapping，
+   *    只有链末尾的 OutputPass 会读取 renderer.toneMapping 统一执行
+   *    （压缩 + sRGB 转换），所以用 composer 时必须显式加 OutputPass
+   */
+  manager.renderer.toneMapping = THREE.ACESFilmicToneMapping
+  manager.renderer.toneMappingExposure = 1.0
 
   manager.camera.position.set(0, 3, 10)
   manager.camera.lookAt(0, 0, 0)
@@ -215,6 +236,10 @@ function init() {
   const vignettePass = new ShaderPass(VignetteShader)
   composer.addPass(vignettePass)
 
+  /** Pass 5：输出——执行色调映射 + sRGB 转换（composer 链必需，切换 renderer.toneMapping 会自动跟随重编译） */
+  const outputPass = new OutputPass()
+  composer.addPass(outputPass)
+
   /** 窗口自适应 */
   window.addEventListener('resize', () => {
     composer.setSize(window.innerWidth, window.innerHeight)
@@ -239,6 +264,23 @@ function init() {
     onChange: (v: number) => { colorPass.uniforms.uSaturation.value = v } })
   panel.addSlider({ id: 'vignette', label: '暗角强度', type: 'slider', min: 0, max: 2, step: 0.05, defaultValue: 0.4,
     onChange: (v: number) => { vignettePass.uniforms.uIntensity.value = v } })
+
+  /* ---- 色调映射参数：作用于 OutputPass，属于整条链的最后一步 ---- */
+  /** Linear = 线性乘 exposure 后裁剪（无压缩对照）；ACES = 电影级压缩曲线，高光平滑滚落 */
+  panel.addSelect({ id: 'tone-mapping', label: '色调映射', type: 'select',
+    options: [
+      { value: 'linear', label: 'Linear（无压缩）' },
+      { value: 'aces', label: 'ACES（电影级）' },
+    ],
+    defaultValue: 'aces',
+    onChange: (v: string) => {
+      manager.renderer.toneMapping = v === 'aces'
+        ? THREE.ACESFilmicToneMapping
+        : THREE.LinearToneMapping
+    } })
+  /** 曝光：色调映射前先乘的亮度系数。Linear 模式下拉高曝光很快死白；ACES 下高光被压出过渡层次 */
+  panel.addSlider({ id: 'exposure', label: '曝光', type: 'slider', min: 0.2, max: 3, step: 0.05, defaultValue: 1.0,
+    onChange: (v: number) => { manager.renderer.toneMappingExposure = v } })
 
   /* ========== 动画循环 ========== */
   const clock = new THREE.Clock()

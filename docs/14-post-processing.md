@@ -18,6 +18,7 @@ composer.addPass(new RenderPass(scene, camera))  // 渲染 3D 场景
 composer.addPass(new UnrealBloomPass(...))        // Bloom 辉光
 composer.addPass(new ShaderPass(ColorCorrection)) // 色彩校正
 composer.addPass(new ShaderPass(Vignette))        // 暗角
+composer.addPass(new OutputPass())                // 色调映射 + sRGB（链末尾必需）
 composer.render()  // 替代 renderer.render()
 ```
 
@@ -57,6 +58,26 @@ color.rgb *= vignette;
 - 对比度：`(color.rgb - 0.5) * contrast + 0.5`
 - 饱和度：`mix(vec3(luminance), color.rgb, saturation)`
 
+### 6. 色调映射（Tone Mapping）
+
+把超亮的高动态范围（HDR）压回显示器能表达的范围 [0, 1]。
+
+本课 HDR 的来源正是 Bloom：`emissiveIntensity = 2.0` 的高发光材质叠加辉光后，像素值会远超 1.0。显示器是 SDR 设备，超出部分被直接裁剪成死白，高光层次全丢——色调映射把高值平滑压缩回来。
+
+常用两种模式（本课控制面板可切换对照）：
+- **ACESFilmicToneMapping**：电影业常用的压缩曲线，高光平滑滚落，过曝区域有过渡层次
+- **LinearToneMapping**：线性乘 exposure 后直接 clamp，「无压缩」对照组——下拉高曝光很快死白
+
+```typescript
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.0  // 曝光：映射前先乘的亮度系数
+```
+
+两个坑：
+
+1. **顺序**：`renderer.outputColorSpace` 与 tone mapping 的先后关系——three 里 tone mapping 发生在输出色彩空间转换（linear → sRGB）**之前**。即管线是「tone mapping 压缩 → sRGB 编码」，两者都发生在着色器输出阶段
+2. **EffectComposer**：中间 Pass 渲染到 render target 时不执行 tone mapping，只有链末尾的 `OutputPass` 会读取 `renderer.toneMapping` 统一执行（压缩 + sRGB 转换）。用 composer 必须显式加 OutputPass，否则画面偏暗且无色调映射
+
 ---
 
 ## API 速查
@@ -67,6 +88,9 @@ color.rgb *= vignette;
 | `RenderPass(scene, camera)` | 渲染 3D 场景到帧缓冲 |
 | `UnrealBloomPass(resolution, strength, radius, threshold)` | Bloom 辉光 |
 | `ShaderPass(shaderMaterial)` | 自定义后处理 Pass |
+| `OutputPass()` | 链末尾执行色调映射 + sRGB 转换（composer 必需） |
+| `renderer.toneMapping` | 色调映射模式（ACES / Linear 等） |
+| `renderer.toneMappingExposure` | 曝光系数，映射前先乘 |
 | `composer.render()` | 执行整个后处理链 |
 | `composer.setSize(w, h)` | 窗口自适应 |
 
@@ -80,6 +104,7 @@ color.rgb *= vignette;
 | ColorCorrectionShader | 色彩校正 | 亮度/对比度/饱和度 |
 | EffectComposer | 后处理链管理 | Pass 串联 |
 | UnrealBloomPass | Bloom 辉光 | 高亮提取 + 高斯模糊 |
+| OutputPass | 输出 | 色调映射 + sRGB 转换，跟随 renderer.toneMapping |
 
 ---
 
@@ -89,6 +114,8 @@ color.rgb *= vignette;
 - 窗口 resize 时忘记 `composer.setSize()` → 画面错位
 - `tDiffuse` 名字写错 → 画面全黑
 - threshold 设为 0 → 整个场景都发光
+- 用 EffectComposer 却不加 OutputPass → 无色调映射且画面偏暗（中间 Pass 不做 sRGB 转换）
+- 直接改 `renderer.toneMapping` 期待 composer 生效 → 无变化，tone mapping 由链末尾 OutputPass 读取执行
 
 ---
 

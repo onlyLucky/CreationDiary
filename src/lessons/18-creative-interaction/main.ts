@@ -5,17 +5,18 @@
  * 1. 掌握 Raycaster 鼠标拾取
  * 2. 学会鼠标跟随效果（cursor-driven）
  * 3. 理解涟漪/扭曲交互效果
- * 4. 了解物理引擎基础概念
+ * 4. 掌握物理引擎（Rapier）与渲染循环的同步模式
  *
  * 本节概览（交互式 3D 场景）：
  * - 鼠标移动 → 相机/物体跟随鼠标
- * - 点击物体 → 涟漪扩散效果
- * - 物体间有简单的物理弹力
+ * - 点击交互平面 → 涟漪扩散效果
+ * - 点击地面平台 → 生成新小球，由 Rapier 物理引擎模拟掉落与碰撞
  *
  * 核心思路：
  * - Raycaster 从相机向鼠标位置发射射线，检测交叉物体
  * - 鼠标坐标归一化到 [-1, 1]
  * - lerp 平滑跟随避免抖动
+ * - Rapier 维护物理世界（world.step 推进模拟），渲染层每帧把刚体位置抄写回 Mesh
  *
  * 参考案例：
  * - Three.js Examples — webgl_raycast
@@ -27,6 +28,7 @@
  */
 
 import * as THREE from 'three'
+import RAPIER from '@dimforge/rapier3d-compat'
 import { SceneManager } from '@/core/SceneManager'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
@@ -95,16 +97,26 @@ const rippleFragmentShader = /* glsl */ `
  *
  * 场景结构：
  * scene (根节点)
- * ├── ambientLight  (环境光)
- * └── 5 个交互平面  (PlaneGeometry + ShaderMaterial，带涟漪/hover 效果)
+ * ├── ambientLight / directionalLight (灯光)
+ * ├── 5 个交互平面  (PlaneGeometry + ShaderMaterial，带涟漪/hover 效果)
+ * ├── 地面平台      (BoxGeometry + Rapier fixed 刚体)
+ * └── 掉落小球      (SphereGeometry + Rapier dynamic 刚体，点击地面可生成)
  *
  * 交互流程：
  * - mousemove：把鼠标坐标归一化到 [-1, 1]，Raycaster 检测悬停
  * - 悬停：把鼠标的 UV 传给着色器 → 平面跟随鼠标微微凸起
- * - 点击：记录时间触发涟漪（sin 波纹随时间扩散衰减）
+ * - 点击交互平面：记录时间触发涟漪（sin 波纹随时间扩散衰减）
+ * - 点击地面平台：Rapier 创建 dynamic 刚体小球，掉落、弹跳、堆积
  * - 相机位置随鼠标轻微偏移 → 视差效果
  */
-function init() {
+async function init() {
+  /**
+   * 初始化 Rapier 物理引擎
+   * - 选 compat 版：wasm 以 base64 内嵌进 JS，Vite 无需额外配置 wasm 资源
+   * - init() 异步解码并编译 wasm，必须 await 之后才能调用其他 Rapier API
+   */
+  await RAPIER.init()
+
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
   const manager = new SceneManager({ canvas, bgColor: '#080808', fov: 60 })
 
@@ -154,6 +166,69 @@ function init() {
 
   /** 灯光 */
   manager.scene.add(new THREE.AmbientLight(0xffffff, 0.5))
+  /** 方向光：给 MeshStandardMaterial 的球体提供立体光照（涟漪平面用 ShaderMaterial 自算漫反射，不受灯光影响） */
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5)
+  dirLight.position.set(5, 8, 5)
+  manager.scene.add(dirLight)
+
+  /* ========== Rapier 物理世界 ========== */
+  /**
+   * 物理世界与渲染世界是两套独立的数据：
+   * - Rapier 在自己的 world 里维护刚体（位置/速度/碰撞），world.step() 每次推进一段模拟
+   * - Three.js 的 Mesh 只负责「画」，我们把刚体算出的位置抄写给 mesh
+   * 这就是「物理 + 渲染」协同的基本模式：物理不管画，渲染不算物理
+   */
+  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
+  /**
+   * 固定时间步长 1/60s：每渲染帧调用一次 step，物理就按固定步长推进。
+   * 简单做法（本课）：一帧一步，60Hz 屏幕上物理时间 = 真实时间。
+   * 更严谨的做法是「累加器」：按真实流逝时间攒 dt，攒够一个固定步长才 step
+   * （可能一帧多步或零步），保证不同刷新率下物理表现一致，本课从简不展开。
+   */
+  world.timestep = 1 / 60
+
+  /** 地面平台：视觉上是一块半透明板子，物理上是一个静止（fixed）的长方体碰撞体 */
+  const ground = new THREE.Mesh(
+    new THREE.BoxGeometry(10, 0.3, 5),
+    new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.9, transparent: true, opacity: 0.85 }),
+  )
+  ground.position.set(0, -1.65, 3.2)
+  manager.scene.add(ground)
+  const groundBody = world.createRigidBody(
+    RAPIER.RigidBodyDesc.fixed().setTranslation(0, -1.65, 3.2),
+  )
+  /** ColliderDesc.cuboid(hx, hy, hz) 用的是「半尺寸」，BoxGeometry(10,0.3,5) 对应 (5, 0.15, 2.5) */
+  world.createCollider(RAPIER.ColliderDesc.cuboid(5, 0.15, 2.5), groundBody)
+
+  /** 球体的 mesh 与刚体配对列表；物理模拟结果每帧同步回 mesh */
+  const ballEntries: Array<{ mesh: THREE.Mesh; body: RAPIER.RigidBody }> = []
+  const ballColors = [0xff6644, 0x44ff66, 0x4466ff, 0xff44ff, 0xffff44, 0x66ffff]
+
+  /** 生成一颗掉落小球：Three.js 建 mesh，Rapier 建 dynamic 刚体 + 球形碰撞体 */
+  function spawnBall(x: number, y: number, z: number, color: number) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 32, 32),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.1 }),
+    )
+    manager.scene.add(mesh)
+
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z),
+    )
+    /** restitution 弹性（0~1，越大越弹）、friction 摩擦，作用在碰撞体上 */
+    world.createCollider(
+      RAPIER.ColliderDesc.ball(0.3).setRestitution(0.6).setFriction(0.5),
+      body,
+    )
+
+    mesh.position.set(x, y, z)
+    ballEntries.push({ mesh, body })
+  }
+
+  /** 初始从空中掉落 6 个球 */
+  ballColors.forEach((color, i) => {
+    spawnBall((i - 2.5) * 0.8 + (Math.random() - 0.5) * 0.4, 4 + i * 0.8, 3.2, color)
+  })
 
   /* ========== 鼠标交互 ========== */
   /** 当前被悬停的平面；clickTime 记录最近一次点击的时间（负值表示从未点击） */
@@ -166,12 +241,34 @@ function init() {
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1
   })
 
-  /** 点击当前悬停的平面时，记录触发时刻并传给着色器生成涟漪 */
-  canvas.addEventListener('click', () => {
+  /**
+   * 点击分两类，与拾取逻辑自然共存：
+   * - 悬停在交互平面上点击 → 触发该平面的涟漪（原有行为）
+   * - 否则用点击坐标再检测一次地面平台 → 命中则从点击处上方生成一颗掉落球
+   *   （生成之后的运动完全交给 Rapier：掉落、弹跳、与其他球碰撞堆积）
+   */
+  canvas.addEventListener('click', (e) => {
     if (hoveredMesh) {
       clickTime = clock.getElapsedTime()
       const material = hoveredMesh.material as THREE.ShaderMaterial
       material.uniforms.uRippleTime.value = clickTime
+      return
+    }
+
+    /** mousemove 维护的 mouse 只反映「悬停」，这里用点击事件自身的坐标更准确 */
+    const clickNdc = new THREE.Vector2(
+      (e.clientX / window.innerWidth) * 2 - 1,
+      -(e.clientY / window.innerHeight) * 2 + 1,
+    )
+    raycaster.setFromCamera(clickNdc, manager.camera)
+    const groundHit = raycaster.intersectObject(ground)[0]
+    if (groundHit) {
+      spawnBall(
+        THREE.MathUtils.clamp(groundHit.point.x, -4, 4),
+        4,
+        THREE.MathUtils.clamp(groundHit.point.z, 1.5, 4.8),
+        ballColors[Math.floor(Math.random() * ballColors.length)],
+      )
     }
   })
 
@@ -215,6 +312,30 @@ function init() {
       const mat = mesh.material as THREE.ShaderMaterial
       mat.uniforms.uTime.value = t
     })
+
+    /**
+     * 物理模拟推进一步，然后把刚体的位置/旋转抄写回 mesh（物理 → 渲染的同步）。
+     * Rapier 的 translation()/rotation() 返回的是它自己的 {x,y,z} / {x,y,z,w} 对象，
+     * 不能直接 THREE 的 copy()（类型不同），用 set 逐分量赋值最稳。
+     */
+    world.step()
+    for (const { mesh, body } of ballEntries) {
+      const p = body.translation()
+      const r = body.rotation()
+      mesh.position.set(p.x, p.y, p.z)
+      mesh.quaternion.set(r.x, r.y, r.z, r.w)
+    }
+
+    /** 掉出平台的球直接回收（移除刚体 + 释放几何体/材质），防止列表与场景无限增长 */
+    for (let i = ballEntries.length - 1; i >= 0; i--) {
+      if (ballEntries[i].mesh.position.y < -12) {
+        world.removeRigidBody(ballEntries[i].body)
+        manager.scene.remove(ballEntries[i].mesh)
+        ballEntries[i].mesh.geometry.dispose()
+        ;(ballEntries[i].mesh.material as THREE.Material).dispose()
+        ballEntries.splice(i, 1)
+      }
+    }
 
     /** 鼠标驱动的相机微偏移（视差效果） */
     manager.camera.position.x += (mouse.x * 0.5 - manager.camera.position.x) * 0.02

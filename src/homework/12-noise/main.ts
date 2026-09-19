@@ -15,9 +15,7 @@
  *
  * 每个案例都保留「错误示范」开关，方便对照修复前后的差异。
  *
- * 运行方式：
- * 1. 修改 src/main.ts 的 MODE 为 'homework'
- * 2. 运行 pnpm dev 启动开发服务器
+ * 运行方式：pnpm dev 启动后，地址栏加 #homework-12 选课
  */
 
 import * as THREE from 'three'
@@ -93,6 +91,14 @@ const noiseUtils = /* glsl */ `
  * - voronoiEdge(p)：2D Voronoi 晶界距离（思考题二「冰面」用）
  */
 const noise3DUtils = /* glsl */ `
+  /**
+   * 3D 哈希函数 — 返回 vec3 梯度向量
+   *
+   * 原理（与 2D 版 hash 相同，多了一个 z 分量）：
+   * 1. 三组不同系数的 dot → 三个互相独立的标量
+   * 2. sin + 大数乘法 + fract → 伪随机小数
+   * 3. 映射到 [-1, 1]，作为立方体 8 个角点的随机方向
+   */
   vec3 hash3(vec3 p) {
     p = vec3(
       dot(p, vec3(127.1, 311.7, 74.7)),
@@ -131,38 +137,53 @@ const noise3DUtils = /* glsl */ `
   }
 
   /**
-   * 3D Simplex 噪声 — 标准实现（Ashima Arts / Ian McEwan）
+   * Simplex 内部辅助函数（三件套）
    *
-   * 特征：只用 4 个单纯形顶点（Perlin 是 8 个），
-   * 偏斜的单纯形网格消除了轴向伪影，更各向同性
+   * - mod289：把值折回 [0, 289) 区间，防止后续乘法溢出精度
+   * - permute：排列置换多项式，把整数坐标打乱成伪随机排列
+   *   （相当于 Simplex 版的「哈希」，给每个单纯形顶点分配随机梯度）
+   * - taylorInvSqrt：泰勒展开近似的 1/sqrt(x)，比内置 inversesqrt 更快
+   *   （用于把梯度向量归一化到单位长度）
    */
   vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec4 permute(vec4 x) { return mod289((x * 34.0 + 1.0) * x); }
   vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
 
+  /**
+   * 3D Simplex 噪声 — 标准实现（Ashima Arts / Ian McEwan）
+   *
+   * 特征：只用 4 个单纯形顶点（Perlin 是 8 个），
+   * 偏斜的单纯形网格消除了轴向伪影，更各向同性
+   */
   float snoise(vec3 v) {
+    /** C：偏斜常数（把正方体网格扭成单纯形网格用）；D：常用系数集 */
     const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0);
     const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
 
+    /** 第 1 步：偏斜坐标，确定当前点落在哪个单纯形（四面体）里 */
     vec3 i  = floor(v + dot(v, C.yyy));
     vec3 x0 = v - i + dot(i, C.xxx);
 
+    /** 第 2 步：按分量大小排序，确定单纯形内 4 个顶点的偏移（i1、i2） */
     vec3 g = step(x0.yzx, x0.xyz);
     vec3 l = 1.0 - g;
     vec3 i1 = min(g.xyz, l.zxy);
     vec3 i2 = max(g.xyz, l.zxy);
 
+    /** 第 3 步：计算当前点到 4 个单纯形顶点的距离向量 */
     vec3 x1 = x0 - i1 + C.xxx;
     vec3 x2 = x0 - i2 + C.yyy;
     vec3 x3 = x0 - D.yyy;
 
+    /** 第 4 步：三次嵌套 permute → 给 4 个顶点各自分配一个伪随机梯度 */
     i = mod289(i);
     vec4 p = permute(permute(permute(
         i.z + vec4(0.0, i1.z, i2.z, 1.0))
       + i.y + vec4(0.0, i1.y, i2.y, 1.0))
       + i.x + vec4(0.0, i1.x, i2.x, 1.0));
 
+    /** 第 5 步：把排列值解码成梯度向量的 (x, y) 分量和剩余高度 h */
     float n_ = 0.142857142857;
     vec3 ns = n_ * D.wyz - D.xzx;
 
@@ -175,6 +196,7 @@ const noise3DUtils = /* glsl */ `
     vec4 y = y_ * ns.x + ns.yyyy;
     vec4 h = 1.0 - abs(x) - abs(y);
 
+    /** 第 6 步：处理 h < 0 的退化情况，拼出 4 个 3D 梯度向量 */
     vec4 b0 = vec4(x.xy, y.xy);
     vec4 b1 = vec4(x.zw, y.zw);
 
@@ -190,12 +212,14 @@ const noise3DUtils = /* glsl */ `
     vec3 p2 = vec3(a1.xy, h.z);
     vec3 p3 = vec3(a1.zw, h.w);
 
+    /** 第 7 步：用近似 1/sqrt 归一化四个梯度向量 */
     vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
     p0 *= norm.x;
     p1 *= norm.y;
     p2 *= norm.z;
     p3 *= norm.w;
 
+    /** 第 8 步：核函数衰减（距顶点越远贡献越小）+ 梯度点积累加 → 最终噪声值 */
     vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
     m = m * m;
     return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
@@ -206,6 +230,11 @@ const noise3DUtils = /* glsl */ `
    *
    * 返回值：到最近两个细胞边界距离之差
    * 细胞边界处值接近 0 → 形成锐利的「晶界」线条
+   */
+  /**
+   * Voronoi 特征点哈希 — 返回 [0, 1] 的 vec2
+   * 每个格子的特征点位置由格子坐标决定（确定性）：
+   * 同一个格子无论何时查询，特征点位置都相同
    */
   vec2 hash2(vec2 p) {
     p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));

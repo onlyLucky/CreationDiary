@@ -10,12 +10,15 @@
  * 本节概览：
  * - 一个全屏 ShaderMaterial 面板
  * - 用纯 shader 实现 3D 场景渲染（不使用 Three.js 几何体）
- * - 展示 SDF 形状组合 + 光照 + 阴影 + AO
+ * - 展示 SDF 形状组合 + 布尔运算（四种形态面板切换）+ 光照 + 阴影 + AO
  *
  * 核心思路：
  * - SDF = 到最近表面的距离（正=外部，负=内部，零=表面上）
  * - Ray Marching = 从相机发射光线，每次步进 SDF 距离
  * - 当步进距离 < epsilon 时，认为光线"击中"了表面
+ * - 布尔运算只是对两个 SDF 值做 min/max：并集 min、交集 max、差集 max(-a, b)
+ *   （负值 = 在内部 → min 只要有一个在内部就在并集内部；
+ *    max 要求两个都在内部 → 交集；-a 把挖具内外翻转 → 从 b 里挖掉 a）
  *
  * 参考案例：
  * - Inigo Quilez — SDF 函数大全（https://iquilezles.org/articles/distfunctions/）
@@ -38,6 +41,7 @@ const rayMarchFragmentShader = /* glsl */ `
   uniform float uSphereRadius;
   uniform float uBoxSize;
   uniform float uSmoothFactor;
+  uniform float uShapeMode;   // 形态模式：0 并集 / 1 平滑并集 / 2 交集 / 3 差集
 
   /**
    * SDF 基本形状
@@ -92,23 +96,48 @@ const rayMarchFragmentShader = /* glsl */ `
    * 返回值 = 到最近表面的距离
    */
   float map(vec3 p) {
-    /** 球体：随时间上下浮动 */
-    float sphere = sdSphere(p - vec3(0.0, sin(uTime) * 0.3, 0.0), uSphereRadius);
-
-    /** 盒子：随时间旋转 */
+    /** 盒子：随时间旋转（rotP 是盒子的局部坐标，交集/差集时挖具球也定义在这个空间里） */
     vec3 rotP = p - vec3(2.5, 0.0, 0.0);
     float c = cos(uTime * 0.5), s = sin(uTime * 0.5);
     rotP.xz = mat2(c, -s, s, c) * rotP.xz;
     float box = sdBox(rotP, vec3(uBoxSize));
 
-    /** 圆环：固定位置 */
+    /**
+     * 球：位置随布尔模式变化
+     * - 并集/平滑并集（0/1）：球独立在左侧浮动（uSphereRadius 控制大小），与盒子分离，
+     *   用来观察两物体「拼接」与「平滑融合」的效果
+     * - 交集/差集（2/3）：挖具球定义在盒子局部空间（跟随旋转）、半径取盒半边长的
+     *   0.6 倍并嵌在盒面上——布尔运算必须有两形状重叠的部分，否则交集是空集
+     *   （max 结果处处为正，物体直接消失）；此时 uSphereRadius 只影响并集模式的独立球
+     */
+    float sphere;
+    if (uShapeMode < 1.5) {
+      sphere = sdSphere(p - vec3(0.0, sin(uTime) * 0.3, 0.0), uSphereRadius);
+    } else {
+      sphere = sdSphere(rotP - vec3(uBoxSize * 0.8, 0.0, 0.0), uBoxSize * 0.6);
+    }
+
+    /**
+     * 四种布尔运算对照（面板切换 uShapeMode）：
+     * 0 并集 opUnion(min)：两个物体硬拼接
+     * 1 平滑并集 opSmoothUnion：交界处圆滑过渡（smin，默认模式）
+     * 2 交集 opIntersection(max)：只留球与盒重叠的部分（透镜状嵌块）
+     * 3 差集 opSubtraction(max(-a,b))：从盒子（第二个参数）里挖掉球（第一个参数）
+     */
+    float body;
+    if (uShapeMode < 0.5) {
+      body = opUnion(sphere, box);
+    } else if (uShapeMode < 1.5) {
+      body = opSmoothUnion(sphere, box, uSmoothFactor);
+    } else if (uShapeMode < 2.5) {
+      body = opIntersection(sphere, box);
+    } else {
+      body = opSubtraction(sphere, box);
+    }
+
+    /** 圆环：固定位置，始终以普通并集加入场景 */
     float torus = sdTorus(p - vec3(-2.5, 0.0, 0.0), vec2(0.8, 0.25));
-
-    /** 平滑并集：球和盒子之间平滑过渡 */
-    float result = opSmoothUnion(sphere, box, uSmoothFactor);
-
-    /** 再和圆环做并集 */
-    result = opUnion(result, torus);
+    float result = opUnion(body, torus);
 
     /** 地面平面 */
     float ground = p.y + 1.5;
@@ -262,6 +291,7 @@ function init() {
       uSphereRadius: { value: 1.0 },
       uBoxSize: { value: 0.6 },
       uSmoothFactor: { value: 0.5 },
+      uShapeMode: { value: 1.0 },
     },
   })
 
@@ -280,6 +310,18 @@ function init() {
   const panel = new ControlPanel('controls')
 
   /** 场景参数：实时修改 shader uniform，Ray March 结果随之变化 */
+
+  /** 布尔运算形态切换：观察同一个球 + 盒在四种 op 下的形状差异 */
+  panel.addSelect({ id: 'shape-mode', label: '布尔运算形态', type: 'select',
+    options: [
+      { value: '0', label: '并集 min（硬拼接）' },
+      { value: '1', label: '平滑并集（圆滑过渡）' },
+      { value: '2', label: '交集 max（只留重叠）' },
+      { value: '3', label: '差集 max(-a,b)（球挖盒）' },
+    ],
+    defaultValue: '1',
+    onChange: (v: string) => { material.uniforms.uShapeMode.value = parseFloat(v) } })
+
   panel.addSlider({ id: 'sphere-radius', label: '球体半径', type: 'slider', min: 0.3, max: 2, step: 0.05, defaultValue: 1.0,
     onChange: (v: number) => { material.uniforms.uSphereRadius.value = v } })
   panel.addSlider({ id: 'box-size', label: '盒子大小', type: 'slider', min: 0.2, max: 1.5, step: 0.05, defaultValue: 0.6,

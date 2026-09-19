@@ -186,7 +186,7 @@ function init() {
   /** 用同样的数量创建两种渲染方式，方便对比性能 */
   const count = 1000
   const normalMeshes = createNormalMeshes(count, manager.scene)
-  const instancedMesh = createInstancedMeshes(count, manager.scene)
+  let instancedMesh = createInstancedMeshes(count, manager.scene)
 
   /** 默认显示 InstancedMesh（性能更好），隐藏普通 Mesh */
   normalMeshes.forEach((m) => { m.visible = false })
@@ -213,11 +213,13 @@ function init() {
   panel.addSlider({ id: 'instance-count', label: '实例数量', type: 'slider', min: 100, max: 50000, step: 100, defaultValue: count,
     onChange: (v: number) => {
       instanceCount = Math.round(v)
-      /** 实例数量变化后需要重建 InstancedMesh：先移除并 dispose 旧对象，再创建新的 */
+      /** 实例数量变化后重建：移除并 dispose 旧对象再创建新的（createInstancedMeshes 内部会 add） */
       manager.scene.remove(instancedMesh)
       instancedMesh.dispose()
-      const newInstanced = createInstancedMeshes(instanceCount, manager.scene)
-      manager.scene.add(newInstanced)
+      /** InstancedMesh.dispose 只释放实例矩阵缓冲，每次新建的 geometry / material 也要释放 */
+      instancedMesh.geometry.dispose()
+      ;(instancedMesh.material as THREE.MeshStandardMaterial).dispose()
+      instancedMesh = createInstancedMeshes(instanceCount, manager.scene)
     },
   })
 

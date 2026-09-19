@@ -2,17 +2,19 @@
  * 第 11 课：GLSL 数学函数
  *
  * 学习目标：
- * 1. 掌握 GLSL 内置数学函数（mix/step/smoothstep/sin/cos/pow）
+ * 1. 掌握 GLSL 内置数学函数（mix/step/smoothstep/clamp/atan/pow/exp）
  * 2. 理解向量运算（dot/cross/normalize/length/distance）
- * 3. 学会用数学函数画基本形状（圆形/矩形/六边形）
+ * 3. 学会用数学函数画基本形状（圆形/矩形/六边形/三角形）
  * 4. 理解坐标系变换和 UV 映射
  * 5. 掌握 fract/mod 等周期函数
+ * 6. 初识 mat2 旋转矩阵的构造（列主序）与矩阵乘向量
  *
- * 本节概览（四个并排的 ShaderMaterial 面板，从左到右）：
- * 1. 形状面板：distance/step/smoothstep 画圆形、矩形、六边形
+ * 本节概览（五个并排的 ShaderMaterial 面板，从左到右）：
+ * 1. 形状面板：distance/step/smoothstep 画圆形、矩形、六边形、三角形
  * 2. 渐变面板：mix/smoothstep 制作水平/垂直/对角/径向四种渐变
  * 3. 波浪面板：sin/cos 叠加多频率正弦波 + 径向扩散波
  * 4. 图案面板：fract/random 生成重复网格与伪随机颜色
+ * 5. 函数演示面板：clamp/atan/pow/exp/cross/sign 六函数 + mat2 旋转
  *
  * 核心思路：
  * - 所有效果都在片元着色器中基于 UV 坐标逐像素计算，顶点着色器只做透传
@@ -26,7 +28,7 @@
  *
  * 运行方式：
  * - 在浏览器中打开此文件对应的 HTML
- * - 观察四个 ShaderMaterial 面板的动态效果
+ * - 观察五个 ShaderMaterial 面板的动态效果
  * - 使用控制面板切换效果和调整参数
  */
 
@@ -51,7 +53,7 @@ import gsap from 'gsap'
 /**
  * 顶点着色器（透传）
  *
- * 四个面板的顶点着色器完全相同，本课所有效果都在片元着色器里实现：
+ * 五个面板的顶点着色器完全相同，本课所有效果都在片元着色器里实现：
  * - 只做两件事：把 UV 坐标传给片元着色器、计算顶点的裁剪空间位置
  * - 三维坐标变换链：模型 → 世界 → 观察 → 裁剪
  *   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0)
@@ -123,6 +125,26 @@ const shapesFragmentShader = /* glsl */ `
     return smoothstep(radius, radius - 0.01, result);
   }
 
+  /**
+   * 三角形 SDF（等边，顶点朝上）
+   *
+   * 原理（半平面组合）：
+   * - 三条边各贡献一个「带符号距离」：d = dot(p, 边法线) - 边偏移
+   *   边法线指向三角形外部，所以内部 d < 0、外部 d > 0
+   * - max() 取三个距离中最大的：只要越过任何一条边就在外面
+   * - 0.866 ≈ √3/2，vec2(0.866, 0.5) 是朝 30° 的单位向量，vec2(-0.866, 0.5) 朝 150°
+   * - 这就是「半平面组合」SDF，第 16 课 Ray Marching 会大量用到这个思想
+   */
+  float triangle(vec2 uv, vec2 center, float size) {
+    vec2 p = uv - center;
+    float d1 = -p.y - size * 0.5;                       // 底边（法线朝下）
+    float d2 = dot(p, vec2(-0.866, 0.5)) - size * 0.5;  // 左斜边（外法线朝 150°）
+    float d3 = dot(p, vec2(0.866, 0.5)) - size * 0.5;   // 右斜边（外法线朝 30°）
+    float d = max(d1, max(d2, d3));
+    /** d < 0 在内部 → 1.0；d > 0 在外部 → 0.0（0.01 过渡带抗锯齿） */
+    return smoothstep(0.01, -0.01, d);
+  }
+
   void main() {
     /**
      * 将 UV 坐标中心化
@@ -155,11 +177,20 @@ const shapesFragmentShader = /* glsl */ `
     float h = hexagon(uv, vec2(-0.25, 0.0), 0.2);
 
     /**
-     * 混合三种形状的颜色
+     * 三角形 — 放在右上方
+     *
+     * size 是顶点到中心的距离；坐标经过 uv - 0.5 中心化，
+     * 范围 [-0.5, 0.5]，所以中心 (0.15, 0.3) 靠右上角
+     */
+    float t = triangle(uv, vec2(0.15, 0.3), 0.13);
+
+    /**
+     * 混合四种形状的颜色
      *
      * vec3(1.0, 0.4, 0.4) = 红色（圆形）
      * vec3(0.4, 1.0, 0.4) = 绿色（矩形）
      * vec3(0.4, 0.4, 1.0) = 蓝色（六边形）
+     * vec3(1.0, 0.9, 0.3) = 黄色（三角形）
      *
      * max() 用于叠加：多个形状重叠时取最亮的颜色
      */
@@ -167,6 +198,7 @@ const shapesFragmentShader = /* glsl */ `
     color = max(color, vec3(1.0, 0.4, 0.4) * c);
     color = max(color, vec3(0.4, 1.0, 0.4) * r);
     color = max(color, vec3(0.4, 0.4, 1.0) * h);
+    color = max(color, vec3(1.0, 0.9, 0.3) * t);
 
     gl_FragColor = vec4(color, 1.0);
   }
@@ -455,7 +487,124 @@ const patternFragmentShader = /* glsl */ `
   }
 `
 
-/* ========== 5. 创建 ShaderMaterial 面板 ========== */
+/* ========== 5. 函数演示 — clamp/atan/pow/exp/cross/sign + mat2 ========== */
+
+/**
+ * 函数演示着色器 — 六个常用函数各做一个最小示例 + mat2 旋转
+ *
+ * 七种效果随时间循环切换（复用渐变面板的 selector 分派思路）：
+ * clamp（值域压缩）/ atan（极坐标光芒）/ pow（伽马曲线）/
+ * exp（衰减光晕）/ cross（面法线）/ sign（条纹分界）/ mat2（旋转矩阵）
+ */
+const functionsVertexShader = /* glsl */ `
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+const functionsFragmentShader = /* glsl */ `
+  uniform float uTime;
+
+  varying vec2 vUv;
+
+  void main() {
+    vec2 uv = vUv - 0.5;
+
+    /** selector：mod 把递增时间映射到 [0, 7)，每约 2.9 秒切换一种演示 */
+    float selector = mod(uTime * 0.35, 7.0);
+    vec3 color = vec3(0.0);
+
+    if (selector < 1.0) {
+      /**
+       * clamp — 值域压缩
+       *
+       * 创意典型用途：光照/高光计算经常冲出 [0, 1]，输出前 clamp 一下，
+       * 防止过曝（一片死白）或负值（颜色反转）
+       */
+      float raw = sin(uv.x * 12.0) * 1.8;    // 故意超出 [0, 1]
+      float clamped = clamp(raw, 0.0, 1.0);  // 超出部分被压成「天花板」
+      color = vec3(clamped, 0.25, 0.45);
+    } else if (selector < 2.0) {
+      /**
+       * atan — 极坐标光芒
+       *
+       * atan(y, x) 把平面坐标变成角度，是极坐标图案的钥匙；
+       * 写法参考课后作业的太阳光芒：sin(角度 × 瓣数) 出光束，pow 锐化
+       */
+      float angle = atan(uv.y, uv.x);
+      float rays = max(0.0, sin(angle * 8.0 + uTime * 0.5));
+      rays = pow(rays, 20.0);  // 柔和正弦压成锐利光束
+      float ring = smoothstep(0.45, 0.35, length(uv));
+      color = vec3(1.0, 0.7, 0.2) * max(rays * ring, 0.05);
+    } else if (selector < 3.0) {
+      /**
+       * pow — 伽马/对比度曲线
+       *
+       * pow(x, 0.4545) 指数 ≈ 1/2.2，正是显示器伽马校正用的幂次；
+       * 上下对比：上半是 pow 提亮后的曲线，下半是线性原值
+       * 注意 pow 的底数必须非负，先 clamp 压进 [0, 1] 再用
+       */
+      float base = clamp(uv.x + 0.5, 0.0, 1.0);
+      float curve = uv.y > 0.0 ? pow(base, 0.4545) : base;
+      color = vec3(curve);
+    } else if (selector < 4.0) {
+      /**
+       * exp — 指数衰减光晕
+       *
+       * exp(-d × 衰减系数) 离中心越远暗得越快，是「发光体」的标配曲线：
+       * 光晕、辉光、能量衰减、雾效浓度都靠它
+       */
+      float d = length(uv);
+      float glow = exp(-d * 6.0) * (0.7 + 0.3 * sin(uTime * 3.0));
+      color = vec3(1.0, 0.55, 0.15) * glow;
+    } else if (selector < 5.0) {
+      /**
+       * cross — 面法线计算
+       *
+       * cross(a, b) 求出同时垂直于 a、b 的向量——由两个边向量算
+       * 三角面法线的标准做法（第 5 课法线、第 16 课 Ray Marching 都会用到）
+       * 颜色即法线可视化：经典的「法线贴图」配色
+       */
+      vec3 edge1 = normalize(vec3(1.0, 0.0, sin(uTime)));
+      vec3 edge2 = normalize(vec3(0.0, 1.0, cos(uTime)));
+      vec3 n = normalize(cross(edge1, edge2));
+      color = n * 0.5 + 0.5;
+    } else if (selector < 6.0) {
+      /**
+       * sign — 硬边条纹分界
+       *
+       * sign(x) 只输出 -1 / 0 / +1，把连续信号一刀切成两半；
+       * 适合做旗子分界、硬边条纹，比 step 更「对称」的切法
+       */
+      float wave = sin(uv.x * 12.0 - uTime * 2.0);
+      float side = sign(wave) * 0.5 + 0.5;  // [-1, 1] 映射回 [0, 1]
+      color = mix(vec3(0.1, 0.3, 0.8), vec3(0.9, 0.75, 0.2), side);
+    } else {
+      /**
+       * mat2 — 二维旋转矩阵
+       *
+       * 构造（重点，GLSL 矩阵按「列」填数）：
+       *   mat2(c, s, -s, c) 的第一列是 (c, s)、第二列是 (-s, c)
+       * 乘法顺序（重点）：固定「矩阵 × 向量」，rot * uv 才是旋转坐标
+       * 整个坐标系转起来，画在里面的矩形就绕面板中心旋转
+       */
+      float a = uTime * 0.8;
+      float c = cos(a);
+      float s = sin(a);
+      mat2 rot = mat2(c, s, -s, c);
+      vec2 ruv = rot * uv;
+      float box = step(abs(ruv.x), 0.28) * step(abs(ruv.y), 0.14);
+      color = vec3(0.4, 0.85, 1.0) * box;
+    }
+
+    gl_FragColor = vec4(color, 1.0);
+  }
+`
+
+/* ========== 6. 创建 ShaderMaterial 面板 ========== */
 
 /**
  * 创建形状展示面板
@@ -463,7 +612,7 @@ const patternFragmentShader = /* glsl */ `
  * - PlaneGeometry(4, 4)：4×4 的正方形平面，UV 范围 [0, 1]
  * - ShaderMaterial：纯片元着色，不依赖灯光/纹理，颜色全部由 shader 计算
  * - side: DoubleSide：双面渲染，旋转视角时背面也能看到内容
- * - 位置 x = -6：位于四个面板的最左侧
+ * - 位置 x = -6：位于五个面板的最左侧
  */
 function createShapesPanel(): THREE.Mesh {
   const geometry = new THREE.PlaneGeometry(4, 4)
@@ -531,7 +680,7 @@ function createWavePanel(): THREE.Mesh {
 /**
  * 创建图案展示面板
  *
- * 位置 x = 6：位于四个面板的最右侧
+ * 位置 x = 6：位于右二（共五个面板）
  * uGridSize 控制网格的密度（每行/列的格子数），
  * 由控制面板的「网格大小」滑块实时更新
  */
@@ -552,7 +701,29 @@ function createPatternPanel(): THREE.Mesh {
   return mesh
 }
 
-/* ========== 6. 初始化场景 ========== */
+/**
+ * 创建函数演示面板
+ *
+ * 位置 x = 10：位于五个面板的最右侧
+ * 七种函数演示随时间自动循环切换，无需额外滑块
+ */
+function createFunctionsPanel(): THREE.Mesh {
+  const geometry = new THREE.PlaneGeometry(4, 4)
+  const material = new THREE.ShaderMaterial({
+    vertexShader: functionsVertexShader,
+    fragmentShader: functionsFragmentShader,
+    uniforms: {
+      uTime: { value: 0 },
+    },
+    side: THREE.DoubleSide,
+  })
+
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.position.set(10, 0, 0)
+  return mesh
+}
+
+/* ========== 7. 初始化场景 ========== */
 
 /**
  * 初始化场景
@@ -561,19 +732,22 @@ function createPatternPanel(): THREE.Mesh {
  * scene (根节点)
  * ├── ambientLight          (环境光)
  * ├── shapesPanel           (形状面板，最左侧)
- * │   └── ShaderMaterial    (圆形/矩形/六边形)
+ * │   └── ShaderMaterial    (圆形/矩形/六边形/三角形)
  * ├── gradientPanel         (渐变面板，左二)
  * │   └── ShaderMaterial    (mix + smoothstep)
- * ├── wavePanel             (波浪面板，右二)
+ * ├── wavePanel             (波浪面板，正中)
  * │   └── ShaderMaterial    (sin/cos 叠加)
- * └── patternPanel          (图案面板，最右侧)
- *     └── ShaderMaterial    (fract + random)
+ * ├── patternPanel          (图案面板，右二)
+ * │   └── ShaderMaterial    (fract + random)
+ * └── functionsPanel        (函数演示面板，最右侧)
+ *     └── ShaderMaterial    (clamp/atan/pow/exp/cross/sign + mat2)
  *
- * 四种 ShaderMaterial 分别演示：
+ * 五种 ShaderMaterial 分别演示：
  * 1. 形状面板：distance/step/smoothstep 画基本形状
  * 2. 渐变面板：mix/smoothstep 创建渐变效果
  * 3. 波浪面板：sin/cos 叠加和径向波浪
  * 4. 图案面板：fract/random 实现图案重复
+ * 5. 函数演示面板：clamp/atan/pow/exp/cross/sign 最小示例 + mat2 旋转
  */
 function init() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
@@ -587,11 +761,11 @@ function init() {
   /**
    * 相机位置调整
    *
-   * z = 12 让相机离平面更远，可以看到四个面板
-   * lookAt(0, 0, 0) 看向场景中心
+   * z = 14 让相机离平面更远，可以看到五个面板
+   * x = 2 对准五个面板的几何中心（面板分布在 x = -6 到 10）
    */
-  manager.camera.position.set(0, 0, 12)
-  manager.camera.lookAt(0, 0, 0)
+  manager.camera.position.set(2, 0, 14)
+  manager.camera.lookAt(2, 0, 0)
 
   const controls = new OrbitControls(manager.camera, canvas)
   controls.enableDamping = true
@@ -604,40 +778,43 @@ function init() {
    * 选中单个面板时相机平滑移动过去，让该面板居中显示。
    */
   const panelX: Record<string, number> = {
-    all: 0,
+    all: 2,
     shapes: -6,
     gradient: -2,
     wave: 2,
     pattern: 6,
+    functions: 10,
   }
 
   /** 切换面板时平滑移动相机，让选中面板居中 */
   const flyTo = (value: string) => {
     const x = panelX[value] ?? 0
     gsap.to(controls.target, { x, y: 0, z: 0, duration: 0.8, ease: 'power2.inOut' })
-    gsap.to(manager.camera.position, { x, y: 0, z: 12, duration: 0.8, ease: 'power2.inOut', onUpdate: () => controls.update() })
+    gsap.to(manager.camera.position, { x, y: 0, z: 14, duration: 0.8, ease: 'power2.inOut', onUpdate: () => controls.update() })
   }
 
   /* ========== 灯光 ========== */
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0)
   manager.scene.add(ambientLight)
 
-  /* ========== 创建四个 ShaderMaterial 面板 ========== */
+  /* ========== 创建五个 ShaderMaterial 面板 ========== */
   /**
-   * 四个面板在 X 轴上并排排列（面板宽 4、间距 4）：
-   *   x：-6     -2     2     6
-   *       形状   渐变   波浪   图案
-   * 相机放在 z = 12、fov = 50 处，可完整看到四个面板
+   * 五个面板在 X 轴上并排排列（面板宽 4、间距 4）：
+   *   x：-6     -2     2     6     10
+   *       形状   渐变   波浪   图案   函数
+   * 相机放在 z = 14、fov = 50 处，可完整看到五个面板
    */
   const shapesPanel = createShapesPanel()
   const gradientPanel = createGradientPanel()
   const wavePanel = createWavePanel()
   const patternPanel = createPatternPanel()
+  const functionsPanel = createFunctionsPanel()
 
   manager.scene.add(shapesPanel)
   manager.scene.add(gradientPanel)
   manager.scene.add(wavePanel)
   manager.scene.add(patternPanel)
+  manager.scene.add(functionsPanel)
 
   /* ========== 控制面板 ========== */
   const panel = new ControlPanel('controls')
@@ -684,6 +861,7 @@ function init() {
       { value: 'gradient', label: '渐变' },
       { value: 'wave', label: '波浪' },
       { value: 'pattern', label: '图案' },
+      { value: 'functions', label: '函数演示' },
     ],
     defaultValue: 'all',
     onChange: (value: string) => {
@@ -693,11 +871,13 @@ function init() {
         gradientPanel.visible = true
         wavePanel.visible = true
         patternPanel.visible = true
+        functionsPanel.visible = true
       } else {
         shapesPanel.visible = value === 'shapes'
         gradientPanel.visible = value === 'gradient'
         wavePanel.visible = value === 'wave'
         patternPanel.visible = value === 'pattern'
+        functionsPanel.visible = value === 'functions'
       }
       /** 同步显示/隐藏对应的滑块控件 */
       updateSliderVisibility(value)
@@ -783,8 +963,8 @@ function init() {
     const elapsedTime = clock.getElapsedTime() * animationSpeed
 
     /**
-     * 每帧把同一时间写入四个面板的 uTime uniform
-     * 这样四个面板共享同一个时钟，动画节奏保持一致
+     * 每帧把同一时间写入五个面板的 uTime uniform
+     * 这样五个面板共享同一个时钟，动画节奏保持一致
      */
     const shapesMaterial = shapesPanel.material as THREE.ShaderMaterial
     shapesMaterial.uniforms.uTime.value = elapsedTime
@@ -797,6 +977,9 @@ function init() {
 
     const patternMaterial = patternPanel.material as THREE.ShaderMaterial
     patternMaterial.uniforms.uTime.value = elapsedTime
+
+    const functionsMaterial = functionsPanel.material as THREE.ShaderMaterial
+    functionsMaterial.uniforms.uTime.value = elapsedTime
 
     controls.update()
     manager.renderer.render(manager.scene, manager.camera)

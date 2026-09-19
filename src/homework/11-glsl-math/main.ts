@@ -13,7 +13,7 @@
  * 3. 太阳光芒：从中心向外发出 8 条均匀光束（极坐标）
  * 4. Fresnel 边缘发光：球体正面暗、边缘亮（dot 反相）
  *
- * 运行方式：在 main.ts 中把 MODE 改为 'homework' 后运行
+ * 运行方式：pnpm dev 启动后，地址栏加 #homework-11 选课
  */
 
 import * as THREE from 'three'

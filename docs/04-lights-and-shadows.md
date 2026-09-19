@@ -13,10 +13,11 @@
 | DirectionalLight | 平行光，模拟太阳 | 室外场景，平行阴影 | 中 |
 | PointLight | 点光源，向四周发光 | 台灯、蜡烛、灯泡 | 中 |
 | SpotLight | 聚光灯，锥形光束 | 手电筒、舞台灯 | 慢 |
+| RectAreaLight | 矩形面光源，一整面发光 | 橱窗、灯箱、屏幕补光 | 慢（不支持阴影） |
 
 ## 阴影三要素
 
-开启阴影需要三步设置：
+开启阴影需要四步设置：
 
 ```typescript
 // 1. 光源：设置 castShadow = true
@@ -61,7 +62,35 @@ scene.add(spotHelper)
 // 点光源 Helper
 const pointHelper = new THREE.PointLightHelper(pointLight, 0.5)
 scene.add(pointHelper)
+
+// 矩形面光源 Helper
+const rectAreaHelper = new THREE.RectAreaLightHelper(rectAreaLight)
+scene.add(rectAreaHelper)
 ```
+
+## RectAreaLight 矩形面光源
+
+RectAreaLight 从一个矩形平面均匀发光，可以实现「一整面墙都是光源」的效果，
+适合橱窗、灯箱、广告牌、屏幕补光等场景。
+
+两个使用要点：
+
+```typescript
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
+import { RectAreaLightHelper } from 'three/addons/helpers/RectAreaLightHelper.js'
+
+// 1. 必须先初始化 uniform 库，否则光照结果不正确（整个程序调用一次即可）
+RectAreaLightUniformsLib.init()
+
+// 2. 创建面光源并控制朝向
+const rectAreaLight = new THREE.RectAreaLight(0x00ffff, 5, 4, 3)
+rectAreaLight.position.set(5, 3, 5)
+rectAreaLight.lookAt(0, 1, 0) // 沿自身 -Z 方向照射
+scene.add(rectAreaLight)
+```
+
+注意：RectAreaLight **不支持投影**（设置 `castShadow` 无效），
+这是它与 SpotLight 的关键区别；且性能开销较大，谨慎在低端设备上大量使用。
 
 ## 灯光切换功能
 
@@ -76,6 +105,7 @@ scene.add(pointHelper)
   <option value="directional">方向光 (Directional)</option>
   <option value="point">点光源 (Point)</option>
   <option value="spot">聚光灯 (Spot)</option>
+  <option value="rectArea">面光源 (RectArea)</option>
 </select>
 ```
 
@@ -88,6 +118,7 @@ const lights: Record<string, THREE.Light> = {
   directional: directionalLight,
   point: pointLight,
   spot: spotLight,
+  rectArea: rectAreaLight,
 }
 
 // 切换灯光显示
@@ -206,6 +237,9 @@ gltfLoader.load(
 | `new THREE.DirectionalLight(color, intensity)` | 方向光 |
 | `new THREE.PointLight(color, intensity, distance)` | 点光源 |
 | `new THREE.SpotLight(color, intensity, distance, angle)` | 聚光灯 |
+| `new THREE.RectAreaLight(color, intensity, width, height)` | 矩形面光源 |
+| `RectAreaLightUniformsLib.init()` | 面光源使用前必须初始化（一次性） |
+| `rectAreaLight.lookAt(x, y, z)` | 面光源朝向（沿 -Z 方向照射） |
 | `light.castShadow = true` | 光源投射阴影 |
 | `mesh.castShadow = true` | 物体投射阴影 |
 | `mesh.receiveShadow = true` | 物体接收阴影 |
@@ -213,6 +247,7 @@ gltfLoader.load(
 | `new THREE.DirectionalLightHelper(light, size)` | 方向光 Helper |
 | `new THREE.SpotLightHelper(light)` | 聚光灯 Helper |
 | `new THREE.PointLightHelper(light, size)` | 点光源 Helper |
+| `new THREE.RectAreaLightHelper(light)` | 面光源 Helper |
 | `new THREE.TextureLoader().load(url)` | 加载普通纹理 |
 | `new THREE.GLTFLoader().load(url)` | 加载 GLTF/GLB 模型 |
 | `new THREE.Group()` | 创建组合对象 |

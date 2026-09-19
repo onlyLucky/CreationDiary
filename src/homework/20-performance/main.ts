@@ -1,13 +1,15 @@
 /**
  * 第 20 课课后作业：性能调优与部署
  *
- * 作业内容：待定
- * 参考案例：待定
+ * 作业要求：把作品优化到 60fps，部署上线
+ * 1. 用性能面板（stats 或浏览器 Performance）定位瓶颈，记录优化前帧率
+ * 2. 至少应用两种优化（实例化/合批、纹理压缩、按需渲染、LOD 任选），记录优化前后对比
+ * 3. 部署上线（Vercel / Netlify / GitHub Pages 任一），附访问链接
+ * 进阶（可选）：跑一次 Lighthouse 记录分数
+ * 参考案例：src/lessons/20-performance/main.ts（实例重建与性能手段可对照）
  *
- * 运行方式：
- * 1. 修改 src/main.ts 的 MODE 为 'homework'
- * 2. 将 import 路径指向 './homework/20-performance/main'
- * 3. 运行 pnpm dev 启动开发服务器
+ * 运行方式：pnpm dev 启动后，地址栏加 #homework-20 选课
+ * 模板说明：下方旋转立方体只是起点骨架，先跑通运行，再把它替换为作业内容。
  */
 
 import * as THREE from 'three'
